@@ -1,0 +1,16 @@
+{
+  "name": "la-nuit-maudite",
+  "private": true,
+  "type": "module",
+  "description": "Les jeux de la soirée d'Halloween : quiz, Le Manoir, Le Possédé, Wanted et Le Pacte.",
+  "scripts": {
+    "relais": "node dev/broker.cjs",
+    "serve": "python3 -m http.server 8080",
+    "test": "node dev/tests/nuit.test.mjs && node dev/tests/demo.mjs && node dev/tests/reseau.mjs"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3",
+    "playwright": "^1.48.0",
+    "websocket-stream": "^5.5.2"
+  }
+}
