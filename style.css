@@ -334,3 +334,7 @@ body.is-demo .tvwrap{top:44px}
 .print .pcard b{font-size:120px;line-height:1}
 .print .pcard span{font:500 16px 'Inter Tight';color:#555;margin-top:12px}
 @media print{body *{visibility:hidden}.print,.print *{visibility:visible}.print{position:absolute;inset:0}.noprint{display:none}}
+
+.steps-list{margin:0;padding-left:20px;font-size:14.5px;line-height:1.5;color:var(--creme)}
+.steps-list li + li{margin-top:6px}
+.steps-list b{color:var(--orange2);font-weight:600}

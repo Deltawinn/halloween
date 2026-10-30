@@ -10,6 +10,7 @@ import { pixelate, botFace } from '../pixel.js';
 import { MONSTERS, SYMBOLS } from '../data.js';
 import { store } from '../net.js';
 import { haversine } from '../host/util.js';
+import { InstallHelp, isStandalone, isPhone } from './join.js';
 
 const lk = (c, k) => `hw.p.${c.room || 'demo'}.${k}`;
 function useFlag(client, key) {
@@ -28,10 +29,7 @@ export function PlayerApp({ client }) {
     document.addEventListener('pointerdown', wake, { once: true });
   }, []);
 
-  if (!pub) {
-    return html`<div class="screen"><div class="grow"></div><p class="lead center muted">Ouverture du portail…</p><div class="grow"></div>
-      <${Status} status=${client.status} hostAlive=${client.hostAlive()} /></div>`;
-  }
+  if (!pub) return html`<${Opening} client=${client} />`;
   // la vue privée (énigmes, statut…) peut arriver un instant après la vue publique : on suit la privée
   const N = (v && v.nuit) || pub.nuit || { st: 'idle' };
   const me = v && v.me;
@@ -47,6 +45,18 @@ export function PlayerApp({ client }) {
     <${Toasts} alerts=${v && v.alerts} storeKey=${lk(client, 'toast')} />
     <${Status} status=${client.status} hostAlive=${client.hostAlive()} />
     <div class="grain"></div>`;
+}
+
+function Opening({ client }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 10000); return () => clearTimeout(t); }, []);
+  const rescan = () => { store.del('hw.lastJoin'); history.replaceState(null, '', location.pathname + '?app=1'); location.reload(); };
+  return html`<div class="screen"><div class="grow"></div>
+    <p class="lead center muted">Ouverture du portail…</p>
+    ${slow ? html`<p class="small center muted" style="margin-top:10px">L’écran TV ne répond pas. La partie n’a peut-être pas encore commencé, ou c’est un ancien QR code.</p>
+      <div style="margin-top:16px"><${Btn} kind="ghost" icon="scan-face" onClick=${rescan}>Scanner le QR code de la TV</${Btn}></div>` : null}
+    <div class="grow"></div>
+    <${Status} status=${client.status} hostAlive=${client.hostAlive()} /></div>`;
 }
 
 // ===================== inscription =====================
@@ -72,8 +82,9 @@ function Welcome({ pub, onGo }) {
     <div class="grow" style="min-height:40dvh"></div>
     <${Ex} size=${66} depth=${10}>Le dernier<br />portail</${Ex}>
     <p class="lead" style="margin-top:22px">Entre. Ne pose aucune question.<br />Tout te sera révélé à la tombée de la nuit.</p>
+    ${!isStandalone() && isPhone() ? html`<${InstallHelp} />` : null}
     <div class="bottom">
-      <${Btn} onClick=${onGo}>Entrer dans la partie</${Btn}>
+      <${Btn} onClick=${onGo}>${!isStandalone() && isPhone() ? 'Continuer sans installer' : 'Entrer dans la partie'}</${Btn}>
       <p class="link">${n ? `${plural(n, 'âme')} déjà ${n > 1 ? 'arrivées' : 'arrivée'}` : 'Les âmes sont attendues ce soir'}</p>
     </div>
   </div>`;

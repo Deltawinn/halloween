@@ -7,6 +7,10 @@ import { Host, brokerParam } from './host/host.js';
 import { Client, LocalClient } from './client.js';
 import { BROKERS, Link } from './net.js';
 import { unlockAudio } from './ui/sound.js';
+import { JoinScreen, isStandalone, isPhone } from './ui/join.js';
+import { store } from './net.js';
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 const root = document.getElementById('app');
 root.textContent = '';
@@ -25,7 +29,17 @@ function parseHash() {
 const customRelay = () => new URLSearchParams(location.search).get('relais');
 
 async function boot() {
-  const h = parseHash();
+  let h = parseHash();
+  const app = isStandalone() || new URLSearchParams(location.search).has('app');
+  // l'appli installée rouvre la dernière partie rejointe
+  if (app && !h.j && !h.mj && !h.tv && !h.demo) {
+    const last = store.get('hw.lastJoin');
+    if (last && /^#(j|mj)=/.test(last)) {
+      history.replaceState(null, '', location.pathname + location.search + last);
+      h = parseHash();
+    }
+  }
+  if (h.j || h.mj) store.set('hw.lastJoin', location.hash);
   if (h.j) {
     document.body.className = 'is-phone';
     const c = new Client({ room: h.j, broker: h.b || '0' });
@@ -50,6 +64,11 @@ async function boot() {
   if (h.demo) {
     const saved = Host.saved(true);
     if (saved) return startDemo(new Host(saved));
+  }
+  if (app || isPhone()) {
+    document.body.className = 'is-phone';
+    render(html`<${JoinScreen} onOrganizer=${() => { document.body.className = 'is-home'; render(html`<${Home} />`, root); }} />`, root);
+    return;
   }
   document.body.className = 'is-home';
   render(html`<${Home} />`, root);
