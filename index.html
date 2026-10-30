@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Le dernier portail</title><meta name="theme-color" content="#000">
+<style>
+@font-face{font-family:Gloock;src:url(fonts/gloock-latin-400-normal.woff2)}
+@font-face{font-family:'Inter Tight';font-weight:500;src:url(fonts/inter-tight-latin-500-normal.woff2)}
+body{margin:0;min-height:100dvh;background:#000;color:#f4e4d0;font:500 17px/1.5 'Inter Tight',sans-serif;display:grid;place-items:center}
+main{max-width:420px;padding:32px 24px}
+h1{font:400 64px/.9 Gloock;color:#ff7a1a;margin:0;text-shadow:1px 1px 0 #4a1c04,2px 2px 0 #4a1c04,3px 3px 0 #4a1c04,4px 4px 0 #4a1c04,5px 5px 0 #4a1c04,6px 6px 0 #4a1c04}
+p{color:#8c7767}
+ul{list-style:none;padding:0;margin:24px 0 0}
+li{display:flex;justify-content:space-between;padding:12px 14px;border:1px solid #2e2117;border-radius:3px;margin-top:6px;background:#16100b}
+.ok{color:#ff9a3d}.ko{color:#8c7767}
+</style></head>
+<body><main>
+<h1>Le dernier<br>portail</h1>
+<p>Le portail s'ouvre bientôt.</p>
+<ul id="r"></ul>
+</main>
+<script type="module">
+import { BROKERS, Link } from './js/net.js';
+const ul = document.getElementById('r');
+for (const b of BROKERS) {
+  const li = document.createElement('li');
+  li.innerHTML = `<span>Relais ${b.label}</span><b class="ko">test…</b>`;
+  ul.appendChild(li);
+  const l = new Link(b.url, (s) => { const el = li.querySelector('b'); if (s === 'ok') { el.textContent = 'joignable'; el.className = 'ok'; } });
+  l.connect();
+  setTimeout(() => { const el = li.querySelector('b'); if (el.textContent !== 'joignable') el.textContent = 'injoignable'; }, 10000);
+}
+</script>
+</body></html>
