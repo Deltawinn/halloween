@@ -90,15 +90,16 @@ export class Bots {
     }
     for (const e of enig) {
       const f = N.found[e.num];
-      if (!f || N.solved[e.num]) continue;
+      if (!f || N.solved[e.num] || e.decoy) continue;
       const m = (this.mem['e' + e.num] ||= { at: f.at + (3 + Math.random() * 4) * MIN });
       if (now >= m.at) this.act(pick(bots).id, 'answer', { num: e.num, text: e.answers[0] });
     }
-    if (enig.length && Object.keys(N.solved).length === enig.length) {
+    const real = enig.filter((e) => !e.decoy).length;
+    if (real && Object.keys(N.solved).length === real) {
       const last = Math.max(...Object.values(N.solved).map((s) => s.at));
       const m = (this.mem.code ||= { at: last + (2 + Math.random() * 2) * MIN, tried: false });
       if (!m.tried && now >= m.at - MIN) { m.tried = true; this.act(pick(bots).id, 'code', { code: '0000' }); }
-      if (now >= m.at) this.act(pick(bots).id, 'code', { code: N.escape.code });
+      if (now >= m.at) this.act(pick(bots).id, 'code', { code: N.escape.fragments ? N.escape.final : N.escape.code });
     }
   }
 

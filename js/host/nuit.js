@@ -67,9 +67,12 @@ export const nuit = {
       const cards = Array.isArray(e.cards) && e.cards.length === 5
         ? e.cards.map((x, i) => ({ num: String(x.num || '').replace(/\D/g, '').slice(0, 6) || String(i + 1), room: String(x.room || '').slice(0, 30) }))
         : N.escape.cards;
+      const fr = Array.isArray(e.fragments) && e.fragments.length === 4 ? e.fragments.map((x) => String(x || '').trim().slice(0, 20)) : N.escape.fragments;
+      const final = e.final != null ? String(e.final).trim().slice(0, 60) : N.escape.final;
       N.escape = {
-        ...N.escape, code, order, cards,
-        count: e.count === 4 ? 4 : 5,
+        ...N.escape, code, order, cards, fragments: fr, final,
+        finalAnswers: final && final !== N.escape.final ? [final, ...final.split(/\s+/).filter((w) => w.length > 4)] : N.escape.finalAnswers,
+        count: e.count === 5 ? 5 : 4,
         ultimate: String(e.ultimate ?? N.escape.ultimate).slice(0, 800),
         enigmas: [],
       };
@@ -89,7 +92,7 @@ export const nuit = {
         st: 'evasion', startAt: now, endsAt: now + N.cfg.evasion * MIN, pausedAt: 0,
         found: {}, solved: {}, hints: {}, tries: 0, escapedAt: 0, timedOut: false, head: 0,
         powers: {}, status: {}, exo: {}, saved: {}, pos: {}, hpos: {}, sights: [], out: {}, lastOut: {},
-        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], onlyHunters: false, sealedBy: null, destroyed: false,
+        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], onlyHunters: false, sealedBy: null, sealedAt: 0, destroyed: false,
       });
       // pouvoirs distribués au hasard, le moins de doublons possible
       const deck = [];
@@ -204,6 +207,7 @@ export const nuit = {
       if (N.st !== 'evasion' || N.pausedAt) return;
       const e = N.escape.enigmas.find((x) => x.num === String(m.num));
       if (!e || !N.found[e.num] || N.solved[e.num]) return;
+      if (e.decoy) { E.alert(pid, 'Mauvaise réponse.', 'bad'); return; }
       const a = norm(m.text);
       const words = a.split(' ');
       const ok = a && e.answers.some((x) => {
@@ -214,7 +218,7 @@ export const nuit = {
       N.solved[e.num] = { pid, at: E.now() };
       const n = Object.keys(N.solved).length;
       feed(E, `${E.name(pid)} a résolu l’énigme ${e.num} : un chiffre du cadenas apparaît.`);
-      const total = N.escape.enigmas.length;
+      const total = realTotal(N);
       E.overlay({ kind: 'clue', title: `Énigme ${e.num} résolue`, sub: `${E.name(pid)} a trouvé. ${n === total ? 'Tous les chiffres sont réunis.' : `${n} chiffre${n > 1 ? 's' : ''} sur ${total}.`}`, ms: 6000 });
       E.alertMany(E.ids(), n === total ? 'Tous les indices sont réunis, une ultime réponse vous permettra de fuir.' : `Énigme ${e.num} résolue par ${E.name(pid)}.`, 'ok');
     },
@@ -232,14 +236,20 @@ export const nuit = {
     code(E, { pid }, m) {
       const N = E.S.nuit;
       if (N.st !== 'evasion' || N.pausedAt) return;
-      if (Object.keys(N.solved).length < (N.escape.count || 4)) return;
-      const code = String(m.code || '').replace(/\D/g, '');
-      if (code === N.escape.code) {
-        feed(E, `${E.name(pid)} a trouvé le code du cadenas.`);
+      if (!N.escape.enigmas.length || Object.keys(N.solved).length < realTotal(N)) return;
+      const X = N.escape;
+      let ok;
+      if (X.fragments) {
+        // réponse en toutes lettres : la cachette des clés
+        const a = norm(m.code);
+        ok = !!a && (X.finalAnswers || [X.final]).some((x) => { const n = norm(x); return a === n || (n.length > 4 && a.includes(n)); });
+      } else ok = String(m.code || '').replace(/\D/g, '') === X.code;
+      if (ok) {
+        feed(E, `${E.name(pid)} a résolu l’ultime énigme.`);
         escape(E, false);
       } else {
         N.tries += 1;
-        E.alert(pid, 'Le cadenas résiste.', 'bad');
+        E.alert(pid, X.fragments ? 'Ce n’est pas la bonne cachette.' : 'Le cadenas résiste.', 'bad');
       }
     },
 
@@ -280,7 +290,10 @@ export const nuit = {
         }
       }
       // arrivée au refuge
-      if (N.st === 'refuge' && N.refugePt && haversine(N.refugePt, p) <= N.cfg.refugeR) save(E, pid);
+      if (N.st === 'refuge' && N.refugePt && haversine(N.refugePt, p) <= N.cfg.refugeR) {
+        if (N.sealedBy) trapped(E, pid);
+        else save(E, pid);
+      }
     },
 
     caught(E, { pid }, m) {
@@ -461,7 +474,8 @@ function base(E) {
   return {
     st: N.st, endsAt: N.endsAt, startAt: N.startAt, huntAt: N.huntAt, nextSight: N.nextSight, refugeAt: N.refugeAt,
     alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, onlyHunters: !!N.onlyHunters, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
-    head: N.head, escapedAt: N.escapedAt, timedOut: N.timedOut,
+    head: N.head, escapedAt: N.escapedAt, timedOut: N.timedOut, words: !!N.escape.fragments,
+    final: N.st !== 'idle' && N.st !== 'evasion' ? N.escape.final : null,
     count: { monstres: countSt(E, 'monstre'), exorcises: countSt(E, 'exorcise'), sauves: countSt(E, 'sauve') },
   };
 }
@@ -482,32 +496,37 @@ function escapeView(E) {
       return o;
     }),
     solved,
-    total: N.escape.enigmas.length,
-    ultimate: solved && solved === N.escape.enigmas.length ? N.escape.ultimate : null,
+    total: realTotal(N),
+    words: !!N.escape.fragments,
+    ultimate: solved && solved === realTotal(N) ? N.escape.ultimate : null,
     hintsUsed: Object.values(N.hints).filter((h) => !h.free).length,
     tries: N.tries,
     projectedHead: headStart(E, false),
   };
 }
 
+function realTotal(N) { return N.escape.enigmas.filter((e) => !e.decoy).length; }
+
 function digitFor(N, e) {
-  if (e.sym === 'ghost') return N.escape.decoy || '0';
-  const i = N.escape.order.indexOf(e.sym);
-  return i >= 0 ? N.escape.code[i] : '?';
+  const X = N.escape;
+  if (e.sym === 'ghost') return X.fragments ? X.decoyFrag || 'Lu' : X.decoy || '0';
+  const i = X.order.indexOf(e.sym);
+  if (i < 0) return '?';
+  return X.fragments ? X.fragments[i] : X.code[i];
 }
 
-// tirage des énigmes de la partie : la réserve est mélangée, chaque carte reçoit une énigme et un symbole
+// tirage des énigmes de la partie : 4 vraies énigmes (une par symbole) et, à 5 cartes, une carte leurre
+// dont l'énigme n'a aucune bonne réponse. Le tout est mélangé puis attaché aux cartes.
 function draw(N) {
   const X = N.escape;
-  const n = X.count === 4 ? 4 : 5;
-  const picks = shuffle(ENIGMA_POOL).slice(0, n);
-  const syms = shuffle(n === 5 ? [...X.order, 'ghost'] : [...X.order]);
+  const withDecoy = X.count === 5;
+  const picks = shuffle(ENIGMA_POOL).slice(0, withDecoy ? 5 : 4);
+  const syms = shuffle([...X.order]);
+  const list = picks.slice(0, 4).map((e, i) => ({ sym: syms[i], q: e.q, answers: e.answers, hint: e.hint }));
+  if (withDecoy) list.push({ decoy: true, sym: null, q: picks[4].q, answers: [], hint: 'Méfie-toi : toutes les cartes ne disent pas la vérité.' });
   X.decoy = String(Math.floor(Math.random() * 10));
-  X.enigmas = picks.map((e, i) => ({
-    num: (X.cards[i] || {}).num || String(i + 1),
-    room: (X.cards[i] || {}).room || '',
-    sym: syms[i], q: e.q, answers: e.answers, hint: e.hint,
-  }));
+  X.decoyFrag = '';
+  X.enigmas = shuffle(list).map((e, i) => ({ ...e, num: (X.cards[i] || {}).num || String(i + 1), room: (X.cards[i] || {}).room || '' }));
 }
 
 function headStart(E, timedOut) {
@@ -537,14 +556,16 @@ function escape(E, timedOut) {
   N.huntAt = now + N.head * MIN;
   N.nextSight = N.huntAt;
   const took = Math.round((now - N.startAt) / MIN);
-  feed(E, timedOut ? `Le temps est écoulé. Le code du cadenas était ${N.escape.code}.` : `Évadés en ${took} min. L’alerte générale est déclenchée.`);
+  const X = N.escape;
+  const secret = X.fragments ? `Les clés sont dans ${X.final}` : `Le code était ${X.code}`;
+  feed(E, timedOut ? `Le temps est écoulé. ${secret}.` : `Évadés en ${took} min. L’alerte générale est déclenchée.`);
   E.overlay({
     kind: 'wanted',
-    title: timedOut ? 'Le temps est écoulé' : 'Le cadenas a cédé',
-    sub: timedOut ? `Le code était ${N.escape.code}. Prenez la clé et fuyez : le chasseur sort dans 1 minute.` : `Évadés en ${took} min. Fuyez : le chasseur sort dans ${N.head} minute${N.head > 1 ? 's' : ''}.`,
+    title: timedOut ? 'Le temps est écoulé' : X.fragments ? 'La cachette est trouvée' : 'Le cadenas a cédé',
+    sub: timedOut ? `${secret}. Prenez-les et fuyez : le chasseur sort dans 1 minute.` : `${X.fragments ? `${secret}. ` : ''}Évadés en ${took} min. Fuyez : le chasseur sort dans ${N.head} minute${N.head > 1 ? 's' : ''}.`,
     ms: 10000,
   });
-  E.alertAll(timedOut ? `Le temps est écoulé. Le code était ${N.escape.code}. Fuyez !` : 'Le cadenas a cédé. Fuyez !', 'bad');
+  E.alertAll(timedOut ? `Le temps est écoulé. ${secret}. Fuyez !` : X.fragments ? `${secret}. Fuyez !` : 'Le cadenas a cédé. Fuyez !', 'bad');
 }
 
 function toRefuge(E) {
@@ -566,30 +587,33 @@ function toRefuge(E) {
     return;
   }
   feed(E, 'Fin de l’alerte générale. Course au refuge : les monstres pour rentrer chez eux, les exorcisés pour les exorciser.');
-  E.overlay({ kind: 'clue', title: 'Course au refuge', sub: 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés.', ms: 11000 });
+  E.overlay({ kind: 'clue', title: 'Course au refuge', sub: 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint en premier, tous les monstres qui arrivent après lui sont exorcisés.', ms: 11000 });
   for (const id of E.ids()) {
-    if (N.status[id] === 'monstre') E.alert(id, 'Rejoins le refuge pour rentrer chez toi. Si un exorcisé y arrive avant toi, tu seras exorcisé.', 'ok', { page: 'refuge' });
-    else E.alert(id, 'Trouve le refuge avant les monstres : si tu y arrives le premier, tous ceux encore dehors sont exorcisés.', 'info', { page: 'refuge' });
+    if (N.status[id] === 'monstre') E.alert(id, 'Rejoins le refuge pour rentrer chez toi. Si un exorcisé y est arrivé avant toi, tu seras exorcisé.', 'ok', { page: 'refuge' });
+    else E.alert(id, 'Trouve le refuge : si tu y arrives avant les monstres, tous ceux qui arrivent après toi sont exorcisés.', 'info', { page: 'refuge' });
   }
 }
 
-// un exorcisé atteint le refuge : il exorcise tous les monstres encore dehors, ou détruit le refuge s'il n'en reste plus
+// le premier exorcisé qui atteint le refuge le prend : les monstres qui arrivent ensuite sont exorcisés
 function seal(E, pid) {
   const N = E.S.nuit;
-  if (N.st !== 'refuge') return;
+  if (N.st !== 'refuge' || N.sealedBy) return;
   const now = E.now();
-  const out = E.ids().filter((id) => N.status[id] === 'monstre');
-  for (const id of out) {
-    N.status[id] = 'exorcise';
-    N.exo[id] = { by: pid, at: now, sealed: true };
-    (N.exoLog ||= []).push({ id, by: pid, at: now, sealed: true });
-    E.alert(id, `${E.name(pid)} a atteint le refuge avant toi : tu es exorcisé.`, 'bad');
-  }
   N.sealedBy = pid;
-  N.destroyed = !out.length;
-  feed(E, out.length ? `${E.full(pid)} atteint le refuge et exorcise ${out.map((id) => E.name(id)).join(', ')}.` : `${E.full(pid)} a trouvé le refuge et l’a détruit.`);
-  E.overlay({ kind: 'death', title: out.length ? 'Le refuge est tombé' : 'Refuge détruit', sub: out.length ? `${E.name(pid)} y est arrivé le premier : ${plural(out.length, 'monstre exorcisé', 'monstres exorcisés')}.` : `${E.name(pid)} l’a retrouvé et détruit.`, pid, ms: 9000 });
-  finish(E);
+  N.sealedAt = now;
+  if (!countSt(E, 'monstre')) {
+    // plus aucun monstre dehors : le refuge est détruit, la nuit s'arrête
+    N.destroyed = true;
+    feed(E, `${E.full(pid)} a trouvé le refuge et l’a détruit.`);
+    E.overlay({ kind: 'death', title: 'Refuge détruit', sub: `${E.name(pid)} l’a retrouvé et détruit.`, pid, ms: 9000 });
+    finish(E);
+    return;
+  }
+  // les monstres ne sont pas prévenus : celui qui arrive maintenant tombe dans le piège
+  feed(E, `${E.full(pid)} a pris le refuge : tout monstre qui y arrive désormais sera exorcisé.`);
+  for (const id of E.ids()) if (N.status[id] === 'exorcise' && id !== pid) E.alert(id, `${E.name(pid)} a pris le refuge. Chaque monstre qui y arrive maintenant sera exorcisé.`, 'ok');
+  E.alert(pid, 'Tu as pris le refuge ! Chaque monstre qui y arrive maintenant sera exorcisé.', 'ok');
+  E.mjAlert(`${E.full(pid)} a pris le refuge.`, 'warn');
 }
 
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
@@ -704,6 +728,24 @@ function exorcise(E, pid, by) {
     if (N.st === 'alerte') toRefuge(E);
     else finish(E);
   }
+}
+
+// un monstre arrive au refuge alors qu'un exorcisé l'a pris
+function trapped(E, pid) {
+  const N = E.S.nuit;
+  if (N.status[pid] !== 'monstre') return;
+  const by = N.sealedBy;
+  const now = E.now();
+  N.status[pid] = 'exorcise';
+  N.exo[pid] = { by, at: now, sealed: true };
+  (N.exoLog ||= []).push({ id: pid, by, at: now, sealed: true });
+  delete N.out[pid];
+  feed(E, `${E.name(pid)} arrive au refuge… mais ${E.name(by)} l’attendait. Exorcisé.`);
+  E.overlay({ kind: 'death', title: 'Piégé au refuge', sub: `${E.name(pid)} arrive au refuge, mais ${E.name(by)} l’y attendait.`, pid, ms: 8000 });
+  E.alert(pid, `${E.name(by)} avait pris le refuge avant toi : tu es exorcisé.`, 'bad', { page: 'exorcise' });
+  E.alert(by, `${E.name(pid)} est tombé dans ton piège au refuge.`, 'ok');
+  E.mjAlert(`${E.full(pid)} piégé au refuge par ${E.full(by)}.`, 'info');
+  if (!countSt(E, 'monstre')) finish(E);
 }
 
 function save(E, pid) {

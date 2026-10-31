@@ -51,8 +51,12 @@ export const SYMBOLS = { skull: 'Le crâne', moon: 'La lune', eye: 'L\'œil', fl
 
 export const DEFAULT_ESCAPE = {
   code: '2639',
+  // chaque énigme résolue révèle un fragment ; dans l'ordre des symboles, ils donnent la cachette des clés
+  fragments: ['Beau', 'Ko', '2', 'Ri'],
+  final: 'le bocal de riz',
+  finalAnswers: ['bocal de riz', 'bocal', 'bocal a riz', 'pot de riz', 'bokal de riz', 'beau ko 2 ri', 'bo ko de ri'],
   order: ['skull', 'moon', 'eye', 'flame'],
-  count: 5,
+  count: 5, // 4 vraies énigmes + 1 carte leurre dont l'énigme n'a pas de bonne réponse
   cards: [
     { num: '13', room: 'Salon' },
     { num: '237', room: 'Salon' },
@@ -60,7 +64,7 @@ export const DEFAULT_ESCAPE = {
     { num: '1408', room: 'Cuisine' },
     { num: '1428', room: 'Salon' },
   ],
-  ultimate: 'Quatre gardiens dorment sur la porte. Lis le code dans l\'ordre de leur réveil.\nCelui qui change l\'homme en loup ne se lève qu\'après que la tête sans chair a parlé.\nCelui qui brûlait les sorcières s\'allume le dernier, quand tous les autres le regardent.\nCelui qui voit tout n\'ouvre ses paupières qu\'une fois le loup réveillé.',
+  ultimate: 'Quatre gardiens dorment sur la porte. Lis leurs fragments dans l\'ordre de leur réveil : ils te diront où dorment les clés.\nCelui qui change l\'homme en loup ne se lève qu\'après que la tête sans chair a parlé.\nCelui qui brûlait les sorcières s\'allume le dernier, quand tous les autres le regardent.\nCelui qui voit tout n\'ouvre ses paupières qu\'une fois le loup réveillé.',
   enigmas: [],
 };
 

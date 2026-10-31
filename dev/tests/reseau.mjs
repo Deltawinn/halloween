@@ -74,7 +74,7 @@ try { await P[0].p.getByText('L’Évasion').waitFor({ timeout: 15000 }); } catc
   console.log(errs.join('\n')); throw e;
 }
 // énigmes
-const enig = await tv.evaluate(() => window.__host.E.S.nuit.escape.enigmas.map((e) => [e.num, e.answers[0]]));
+const enig = await tv.evaluate(() => window.__host.E.S.nuit.escape.enigmas.filter((e) => !e.decoy).map((e) => [e.num, e.answers[0]]));
 for (let i = 0; i < enig.length; i++) {
   const p = P[i % 4].p;
   if (i >= 4) await p.getByRole('button', { name: 'Retour' }).first().click();
@@ -83,7 +83,7 @@ for (let i = 0; i < enig.length; i++) {
   await p.locator('input.inp').waitFor({ timeout: 15000 });
   await p.locator('input.inp').fill(enig[i][1]);
   await p.getByRole('button', { name: 'Valider la réponse' }).click();
-  await p.getByText('Ce chiffre rejoint le cadenas').waitFor({ timeout: 15000 });
+  await p.getByText(/rejoint (le cadenas|les autres)/).waitFor({ timeout: 15000 });
 }
 await wait(1500);
 await tv.screenshot({ path: shots + 'n-tv-evasion.png' });
@@ -91,8 +91,8 @@ const p0 = P[1].p;
 await p0.getByRole('button', { name: 'Retour' }).first().click();
 await p0.getByRole('heading', { name: /ultime/ }).waitFor({ timeout: 15000 });
 await p0.screenshot({ path: shots + 'n-p-ultime.png' });
-await p0.locator('.codein').fill(await tv.evaluate(() => window.__host.E.S.nuit.escape.code));
-await p0.getByRole('button', { name: 'Tenter le code' }).click();
+await p0.locator('input.inp').fill('le bocal de riz');
+await p0.getByRole('button', { name: 'Valider la réponse' }).click();
 await p0.getByRole('heading', { name: 'Fuyez' }).waitFor({ timeout: 15000 });
 for (const x of P) await x.p.getByRole('button', { name: 'Voir la carte' }).click({ timeout: 15000 });
 // le chasseur sort tout de suite

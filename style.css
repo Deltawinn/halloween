@@ -366,3 +366,9 @@ body.is-demo .tvwrap{top:44px}
 .tvrank .rk{font:400 34px Gloock;color:var(--orange);width:40px;text-align:center}
 .tvrank b{flex:1;font-size:28px;font-weight:600}
 .tvrank .pt{font:400 34px Gloock;color:var(--orange2)}
+
+.story p{margin:0 0 18px;font:400 46px/1.25 Gloock;color:var(--creme)}
+.story p.old{color:#6a564a;font-size:34px}
+.story p.cur{color:var(--creme);text-shadow:0 0 30px rgba(255,122,26,.25)}
+.story .caret{display:inline-block;width:4px;height:44px;background:var(--orange);margin-left:6px;vertical-align:-6px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}

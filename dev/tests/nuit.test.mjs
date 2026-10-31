@@ -35,33 +35,39 @@ const X = E.S.nuit.escape;
 assert.equal(X.enigmas.length, 5);
 assert.equal(new Set(X.enigmas.map((e) => e.q)).size, 5, 'cinq énigmes différentes');
 assert.deepEqual(X.enigmas.map((e) => e.num), ['13', '237', '666', '1408', '1428']);
-assert.equal(X.enigmas.filter((e) => e.sym === 'ghost').length, 1, 'un leurre');
+assert.equal(X.enigmas.filter((e) => e.decoy).length, 1, 'une carte leurre');
+const real = X.enigmas.filter((e) => !e.decoy);
+const decoy = X.enigmas.find((e) => e.decoy);
 // pouvoirs fixés pour la suite du test
 for (const id of ids) E.S.nuit.powers[id] = { id: 'hide', used: false };
 Object.assign(E.S.nuit.powers, { p2: { id: 'fake', used: false }, p4: { id: 'immune', used: false } });
 assert.equal(E.playerView('p0').nuit.enigmas.filter((e) => e.found).length, 0, 'aucun numéro connu avant d’être tapé');
 assert.equal(E.playerView('p0').nuit.enigmas[0].num, undefined);
 act('p0', 'num', { n: '999' });
-const e0 = X.enigmas[0];
+const e0 = real[0];
 act('p0', 'num', { n: e0.num });
 act('p1', 'answer', { num: e0.num, text: 'mauvaise réponse' });
 assert.ok(!E.S.nuit.solved[e0.num], 'mauvaise réponse refusée');
 act('p1', 'answer', { num: e0.num, text: e0.answers[0].toUpperCase() });
 assert.ok(E.S.nuit.solved[e0.num]);
-X.enigmas.slice(1).forEach((e, i) => {
+act('p9', 'num', { n: decoy.num });
+act('p9', 'answer', { num: decoy.num, text: 'Candyman' });
+assert.ok(!E.S.nuit.solved[decoy.num], 'le leurre n’a pas de bonne réponse');
+real.slice(1).forEach((e, i) => {
   const pid = 'p' + (i + 2);
   act(pid, 'num', { n: e.num });
   if (i === 1) act(pid, 'hint', { num: e.num });
   act(pid, 'answer', { num: e.num, text: 'je crois que c’est ' + e.answers[0] });
 });
 const pv = E.playerView('p5').nuit;
-assert.equal(pv.solved, 5);
+assert.equal(pv.solved, 4);
 assert.ok(pv.ultimate);
-for (const e of pv.enigmas) if (e.sym !== 'ghost') assert.equal(e.digit, X.code[X.order.indexOf(e.sym)], 'chiffre du symbole');
+for (const e of pv.enigmas.filter((x) => x.solvedBy)) assert.equal(e.digit, X.fragments[X.order.indexOf(e.sym)], 'fragment du symbole');
+assert.equal(X.order.map((sy) => X.fragments[X.order.indexOf(sy)]).join(' '), 'Beau Ko 2 Ri');
 T += 10 * MIN;
-act('p5', 'code', { code: '1111' });
+act('p5', 'code', { code: 'sous le canapé' });
 assert.equal(E.S.nuit.tries, 1);
-act('p5', 'code', { code: X.code });
+act('p5', 'code', { code: 'Dans le Bocal de riz !' });
 assert.equal(E.S.nuit.st, 'alerte');
 assert.equal(E.S.nuit.head, 5, 'avance : max 6 min, moins 1 indice');
 // traque
@@ -128,9 +134,10 @@ assert.equal(res.saved.length, 6);
 assert.equal(res.exo.length, 4);
 JSON.stringify(E.publicView({})); JSON.stringify(E.mjView());
 
-// course au refuge : un exorcisé qui arrive le premier exorcise tous les monstres encore dehors
+// course au refuge : le premier exorcisé arrivé prend le refuge, les monstres qui arrivent après lui sont exorcisés
 E.handle({ mj: true }, { g: 'nuit', a: 'reset' });
 E.handle({ mj: true }, { g: 'nuit', a: 'start' });
+for (const id of ids) E.S.nuit.powers[id] = { id: 'hide', used: false };
 E.handle({ mj: true }, { g: 'nuit', a: 'next' });
 act('p0', 'caught', { by: 'mj' });
 E.handle({ mj: true }, { g: 'nuit', a: 'next' });
@@ -139,10 +146,16 @@ assert.ok(E.playerView('p0').nuit.tiles, 'les exorcisés ont les indices');
 act('p1', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
 assert.equal(E.S.nuit.status.p1, 'sauve');
 act('p0', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
-assert.equal(E.S.nuit.st, 'fin', 'le refuge est tombé');
-assert.equal(E.S.nuit.status.p2, 'exorcise');
+assert.equal(E.S.nuit.sealedBy, 'p0');
+assert.equal(E.S.nuit.st, 'refuge', 'la partie continue');
+assert.equal(E.S.nuit.status.p2, 'monstre', 'les autres ne sont pas exorcisés tant qu’ils n’arrivent pas');
+act('p2', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
+assert.equal(E.S.nuit.status.p2, 'exorcise', 'piégé en arrivant');
 assert.equal(E.S.nuit.status.p1, 'sauve', 'déjà rentré chez lui');
+for (const id of ['p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9']) act(id, 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
+assert.equal(E.S.nuit.st, 'fin');
 assert.equal(E.S.nuit.results.sealedBy, 'p0');
+assert.ok(!E.S.nuit.results.destroyed);
 
 // tout le monde attrapé pendant l'alerte : les exorcisés doivent retrouver le refuge pour le détruire
 E.handle({ mj: true }, { g: 'nuit', a: 'reset' });

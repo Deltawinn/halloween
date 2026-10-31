@@ -1,5 +1,5 @@
 // Écran TV : il fait tourner la partie (l'hôte) et affiche ce que tout le monde peut voir.
-import { html, useState, useEffect, useRef, useSource, useNow, Safe, Countdown, Icon, Ex, Av, Pill, Scene, QR, Title, fmtShort, hm, plural, SYM_ICON } from './kit.js';
+import { html, useState, useEffect, useRef, useMemo, useSource, useNow, Safe, Countdown, Icon, Ex, Av, Pill, Scene, QR, Title, fmtShort, hm, plural, SYM_ICON } from './kit.js';
 import { GameMap } from './map.js';
 import { verdict } from './player.js';
 import { play, unlockAudio, setSound, soundOn } from './sound.js';
@@ -21,6 +21,8 @@ export function TvApp({ host }) {
     ro.observe(wrap.current);
     return () => ro.disconnect();
   }, []);
+  const [replay, setReplay] = useState(0);
+  host.replay = () => setReplay((x) => x + 1);
   const lastOv = useRef(null);
   useEffect(() => {
     if (pub && pub.ov && pub.ov.id !== lastOv.current) {
@@ -31,7 +33,7 @@ export function TvApp({ host }) {
   if (!pub) return html`<div class="tvwrap" ref=${wrap}></div>`;
   const N = pub.nuit;
   let body;
-  if (N.st === 'idle') body = pub.screen === 'intro' ? html`<${Intro} pub=${pub} />` : html`<${Accueil} pub=${pub} host=${host} />`;
+  if (N.st === 'idle') body = pub.screen === 'intro' ? html`<${Intro} pub=${pub} key=${'intro' + replay} />` : html`<${Accueil} pub=${pub} host=${host} />`;
   else if (N.st === 'evasion') body = html`<${Evasion} pub=${pub} clock=${clock} />`;
   else if (N.st === 'alerte') body = html`<${Alerte} pub=${pub} clock=${clock} />`;
   else if (N.st === 'refuge') body = html`<${Refuge} pub=${pub} clock=${clock} />`;
@@ -68,6 +70,7 @@ function Corner({ host, pub }) {
       ${!host.demo ? html`<button class="tvbtn" onClick=${() => setMj(true)}>Panneau MJ</button>` : null}
       <button class="tvbtn" onClick=${() => { setSound(!snd); setSnd(!snd); unlockAudio(); }}>${snd ? 'Son activé' : 'Son coupé'}</button>
       <button class="tvbtn" onClick=${full}>Plein écran</button>
+      ${pub.screen === 'intro' && pub.nuit.st === 'idle' ? html`<button class="tvbtn" onClick=${() => { unlockAudio(); host.replay && host.replay(); }}>Relancer le récit</button>` : null}
       ${pub.ov ? html`<button class="tvbtn" onClick=${() => host.local({ a: 'skipOverlay' })}>Passer</button>` : null}
     </div>`;
 }
@@ -100,19 +103,78 @@ function Accueil({ pub, host }) {
     </div>`;
 }
 
+// Récit d'ouverture : le texte s'écrit ligne par ligne et la TV le lit à voix haute
+function story(total) {
+  const t = Math.floor(total / 60) ? `${Math.floor(total / 60)} heure${Math.floor(total / 60) > 1 ? 's' : ''} ${total % 60 ? String(total % 60) : ''}` : `${total} minutes`;
+  return [
+    'Ce soir, c’est Halloween.',
+    'La seule nuit de l’année où les monstres peuvent sortir sans risque.',
+    'Vous étiez dehors. Vous riiez. Et puis… plus rien.',
+    'Vous vous réveillez sans souvenirs, dans une maison que vous ne connaissez pas.',
+    'Les portes sont fermées. Les clés ont disparu.',
+    'Quelqu’un les a cachées… et il a laissé des indices, numérotés, dans le salon et la cuisine.',
+    `Le dernier portail vers l’Hôtel Transylvanie se ferme dans ${t.trim()}.`,
+    'Trouvez les clés. Fuyez. Et surtout… ne vous faites pas attraper.',
+  ];
+}
+
+function speak(text, done) {
+  try {
+    const S = window.speechSynthesis;
+    if (!S || !soundOn()) return false;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'fr-FR';
+    u.rate = 0.86;
+    u.pitch = 0.55;
+    const voices = S.getVoices().filter((v) => (v.lang || '').toLowerCase().startsWith('fr'));
+    const v = voices.find((x) => /paul|thomas|henri|claude|daniel|male|homme/i.test(x.name)) || voices[0];
+    if (v) u.voice = v;
+    u.onend = done;
+    u.onerror = done;
+    S.speak(u);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function Intro({ pub }) {
   const d = pub.nuit.durations;
   const total = d.evasion + d.alerte + d.refuge;
+  const lines = useMemo(() => story(total), [total]);
+  const [i, setI] = useState(0);
+  const [typed, setTyped] = useState('');
+  useEffect(() => {
+    unlockAudio();
+    const amb = setInterval(() => play('night'), 3000);
+    play('night');
+    return () => { clearInterval(amb); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {} };
+  }, []);
+  useEffect(() => {
+    if (i >= lines.length) return undefined;
+    const line = lines[i];
+    let k = 0;
+    const tt = setInterval(() => { k += 1; setTyped(line.slice(0, k)); if (k >= line.length) clearInterval(tt); }, 42);
+    let over = false;
+    const next = () => { if (over) return; over = true; setTimeout(() => { setTyped(''); setI((x) => x + 1); }, 650); };
+    const t0 = setTimeout(() => speak(line, next), 250);
+    const fb = setTimeout(next, line.length * 95 + 3000);
+    return () => { over = true; clearInterval(tt); clearTimeout(t0); clearTimeout(fb); };
+  }, [i]);
+  const end = i >= lines.length;
   return html`
     <div class="scene-wrap" style="right:0;top:0;width:820px;height:1080px"><${Scene} name="porte" className="scene" style="width:100%;height:100%" /></div>
-    <div class="pg" style="padding-top:240px;width:1180px">
-      <${Ex} size=${150} depth=${12}>Réveil</${Ex}>
-      <p class="tvlead" style="margin-top:40px;text-align:justify">Ce soir, c’était Halloween : la seule nuit où les monstres peuvent sortir sans risque. Vous vous réveillez sans souvenirs, enfermés dans une maison que vous ne connaissez pas. Aucune issue. Quelqu’un a caché la clé, et le dernier portail vers l’Hôtel Transylvanie se ferme dans ${Math.floor(total / 60) ? `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')}` : `${total} min`}.</p>
-      <div class="pills" style="margin-top:34px;gap:14px">
+    <div class="pg" style="padding-top:150px;width:1180px">
+      ${end ? html`<${Ex} size=${150} depth=${12}>Réveil</${Ex}>` : html`<p class="tvlabel">Halloween, 31 octobre</p>`}
+      <div class="story" style="margin-top:${end ? 30 : 10}px">
+        ${lines.slice(Math.max(0, i - 4), i).map((l, j) => html`<p key=${l} class="old">${l}</p>`)}
+        ${!end ? html`<p class="cur">${typed}<span class="caret"></span></p>` : null}
+      </div>
+      ${end ? html`<div class="pills" style="margin-top:34px;gap:14px">
         <span class="pill or" style="font-size:22px;padding:10px 20px">Évasion ${d.evasion} min</span>
         <span class="pill" style="font-size:22px;padding:10px 20px">Alerte générale ${d.alerte} min</span>
         <span class="pill" style="font-size:22px;padding:10px 20px">Refuge ${d.refuge} min</span>
-      </div>
+      </div>` : null}
     </div>`;
 }
 
@@ -134,7 +196,7 @@ function Evasion({ pub, clock }) {
       </div>`)}
     </div>
     <div style="display:flex;align-items:center;gap:40px;margin-top:50px">
-      <p class="tvlabel" style="margin:0;width:200px">Le cadenas</p>
+      <p class="tvlabel" style="margin:0;width:200px">${N.words ? 'Les fragments' : 'Le cadenas'}</p>
       <div class="tvdg">${Array.from({ length: N.total || 4 }, (_, i) => i).map((i) => {
         const e = N.enigmas.filter((x) => x.solvedBy)[i];
         return e ? html`<div><${Icon} n=${SYM_ICON[e.sym]} s=${30} /><b>${e.digit}</b></div>` : html`<div class="lock"><${Icon} n="lock" s=${30} /><b>?</b></div>`;
@@ -186,7 +248,7 @@ function Refuge({ pub, clock }) {
       <div style="display:flex;align-items:baseline;gap:40px"><${Ex} size=${130} depth=${10}>Le refuge</${Ex}><span class="tvbig tnum" style="font-size:130px;text-shadow:${ext(10)}"><${Countdown} to=${N.endsAt} clock=${clock} /></span></div>
       <p class="tvlabel" style="margin-top:10px">avant le dernier départ pour l’Hôtel Transylvanie</p>
       <div class="tvtiles" style="margin-top:56px">${(N.tiles || []).map((t) => html`<div class=${t.open ? 'open' : ''} key=${t.k}><b>${t.k + 1}</b>${t.open ? 'Déverrouillé' : `dans ${fmtShort(t.at - now)}`}</div>`)}</div>
-      <p class="tvlead" style="margin-top:34px;color:var(--brume)">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés doivent retrouver le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés.'}</p>
+      <p class="tvlead" style="margin-top:34px;color:var(--brume)">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés doivent retrouver le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint en premier, tous les monstres qui arrivent après lui sont exorcisés.'}</p>
       <p class="tvlabel" style="margin-top:14px">Chaque indice ne se lit qu’une fois, sur les téléphones.</p>
       <div style="display:flex;align-items:center;gap:24px;margin-top:60px">
         <p class="tvlabel" style="margin:0">${saved.length ? 'Déjà arrivés' : 'Personne n’est encore arrivé'}</p>

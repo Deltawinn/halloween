@@ -117,15 +117,18 @@ function Enigmes({ v, send }) {
   const [order, setOrder] = useState(X.order);
   const [ult, setUlt] = useState(X.ultimate);
   const [cards, setCards] = useState(X.cards);
-  const [count, setCount] = useState(X.count || 5);
+  const [count, setCount] = useState(X.count || 4);
+  const [frags, setFrags] = useState(X.fragments || null);
+  const [final, setFinal] = useState(X.final || '');
   const [pick, setPick] = useState(null);
   const [clues, setClues] = useState(N.clues);
   const [print, setPrint] = useState(false);
   const [pool, setPool] = useState(false);
-  useEffect(() => { setCode(X.code); setOrder(X.order); setUlt(X.ultimate); setCards(X.cards); setCount(X.count || 5); }, [JSON.stringify([X.code, X.order, X.ultimate, X.cards, X.count])]);
+  useEffect(() => { setCode(X.code); setOrder(X.order); setUlt(X.ultimate); setCards(X.cards); setCount(X.count || 4); setFrags(X.fragments || null); setFinal(X.final || ''); }, [JSON.stringify([X.code, X.order, X.ultimate, X.cards, X.count, X.fragments, X.final])]);
   useEffect(() => setClues(N.clues), [JSON.stringify(N.clues)]);
-  const dirty = code !== X.code || order.join() !== X.order.join() || ult !== X.ultimate || JSON.stringify(cards) !== JSON.stringify(X.cards) || count !== (X.count || 5);
-  const save = () => send('nuit', 'escape', { escape: { code, order, ultimate: ult, cards, count } });
+  const dirty = code !== X.code || order.join() !== X.order.join() || ult !== X.ultimate || JSON.stringify(cards) !== JSON.stringify(X.cards) || count !== (X.count || 4)
+    || JSON.stringify(frags) !== JSON.stringify(X.fragments || null) || final !== (X.final || '');
+  const save = () => send('nuit', 'escape', { escape: { code, order, ultimate: ult, cards, count, fragments: frags, final } });
   const swap = (i) => {
     if (pick == null) return setPick(i);
     const o = order.slice();
@@ -136,7 +139,7 @@ function Enigmes({ v, send }) {
   const setCard = (i, k, val) => setCards(cards.map((c, j) => (j === i ? { ...c, [k]: val } : c)));
   if (print) return html`<${PrintCards} cards=${cards.slice(0, count)} close=${() => setPrint(false)} />`;
   return html`
-    <p class="small muted" style="margin:0 0 12px">Au lancement, l’appli tire au sort ${count} énigmes parmi les 20 de la réserve et les attache aux cartes. Chaque bonne réponse révèle un chiffre et son symbole. ${count === 5 ? 'Le cinquième symbole, le fantôme, est un leurre : l’ultime énigme ne le cite pas.' : ''}</p>
+    <p class="small muted" style="margin:0 0 12px">Au lancement, l’appli tire au sort ${count} énigmes parmi les 20 de la réserve et les attache aux cartes. Chaque bonne réponse révèle ${frags ? 'un fragment' : 'un chiffre'} et son symbole. ${count === 5 ? 'La cinquième carte est un leurre : son énigme n’a aucune bonne réponse.' : ''}</p>
     <p class="label">Nombre d’énigmes par partie</p>
     <div class="seg" style="margin-bottom:14px">${[4, 5].map((n) => html`<button class=${count === n ? 'on' : ''} disabled=${!idle} onClick=${() => setCount(n)}>${n === 5 ? '5, dont un leurre' : '4'}</button>`)}</div>
     <p class="label">Les cartes à cacher</p>
@@ -144,13 +147,21 @@ function Enigmes({ v, send }) {
       <input class="inp" inputmode="numeric" disabled=${!idle} value=${c.num} onInput=${(e) => setCard(i, 'num', e.target.value.replace(/\D/g, '').slice(0, 6))} style="font:400 20px Gloock;color:var(--orange)" />
       <input class="inp" disabled=${!idle} value=${c.room} placeholder="Pièce" onInput=${(e) => setCard(i, 'room', e.target.value)} />
     </div>`)}
-    <div class="orow" style="margin-top:10px"><${Icon} n="lock" /><span class="olbl">Code du cadenas<small>Les 4 chiffres de ton vrai cadenas</small></span>
-      <input class="inp" style="width:110px;height:40px;text-align:center;font:400 22px Gloock;color:var(--orange)" inputmode="numeric" maxlength="4" disabled=${!idle} value=${code} onInput=${(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} /></div>
-    <p class="label" style="margin-top:12px">Ordre des symboles dans le code ${idle ? html`<span class="muted">(touche deux symboles pour les échanger)</span>` : ''}</p>
-    <div class="dg">${order.map((sy, i) => html`<div key=${sy} style=${pick === i ? 'border-color:var(--orange)' : ''} onClick=${() => idle && swap(i)}><${Icon} n=${SYM_ICON[sy]} s=${18} /><b>${code[i] || '?'}</b></div>`)}</div>
+    ${frags ? html`
+      <p class="label" style="margin-top:10px">Les fragments, dans l’ordre des symboles</p>
+      <div class="dg">${order.map((sy, i) => html`<div key=${sy} style=${pick === i ? 'border-color:var(--orange)' : ''} onClick=${() => idle && swap(i)}><${Icon} n=${SYM_ICON[sy]} s=${18} />
+        <input class="inp" style="height:34px;width:74px;padding:0 6px;text-align:center;font:400 18px Gloock;color:var(--orange)" disabled=${!idle} value=${frags[i]} onClick=${(e) => e.stopPropagation()}
+          onInput=${(e) => setFrags(frags.map((f, j) => (j === i ? e.target.value : f)))} /></div>`)}</div>
+      <label class="field" style="margin-top:10px"><span class="label">La cachette des clés (réponse finale)</span>
+        <input class="inp" disabled=${!idle} value=${final} onInput=${(e) => setFinal(e.target.value)} /></label>`
+    : html`
+      <div class="orow" style="margin-top:10px"><${Icon} n="lock" /><span class="olbl">Code du cadenas<small>Les 4 chiffres de ton vrai cadenas</small></span>
+        <input class="inp" style="width:110px;height:40px;text-align:center;font:400 22px Gloock;color:var(--orange)" inputmode="numeric" maxlength="4" disabled=${!idle} value=${code} onInput=${(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} /></div>
+      <p class="label" style="margin-top:12px">Ordre des symboles dans le code ${idle ? html`<span class="muted">(touche deux symboles pour les échanger)</span>` : ''}</p>
+      <div class="dg">${order.map((sy, i) => html`<div key=${sy} style=${pick === i ? 'border-color:var(--orange)' : ''} onClick=${() => idle && swap(i)}><${Icon} n=${SYM_ICON[sy]} s=${18} /><b>${code[i] || '?'}</b></div>`)}</div>`}
     <p class="label" style="margin-top:14px">L’ultime énigme</p>
     <textarea class="inp" rows="6" disabled=${!idle} value=${ult} onInput=${(e) => setUlt(e.target.value)}></textarea>
-    ${idle && dirty ? html`<div style="margin-top:8px"><${Btn} disabled=${code.length !== 4} onClick=${save}>Enregistrer</${Btn}></div>` : null}
+    ${idle && dirty ? html`<div style="margin-top:8px"><${Btn} disabled=${frags ? !final.trim() || frags.some((f) => !f.trim()) : code.length !== 4} onClick=${save}>Enregistrer</${Btn}></div>` : null}
     <div class="stack" style="margin-top:8px">
       <${Btn} kind="ghost" icon="printer" onClick=${() => setPrint(true)}>Imprimer les cartes numérotées</${Btn}>
       <${Btn} kind="ghost" icon="list" onClick=${() => setPool(!pool)}>${pool ? 'Masquer' : 'Voir'} la réserve de 20 énigmes</${Btn}>
@@ -189,7 +200,7 @@ function Prep({ v, send, gps }) {
     <div class="stats" style="margin-bottom:12px">
       <div class="stat"><b>${ps.length}</b><span>joueurs</span></div>
       <div class="stat"><b>${ready}</b><span>fiches prêtes</span></div>
-      <div class="stat"><b>${N.escape.code}</b><span>code du cadenas</span></div>
+      <div class="stat"><b>${N.escape.count || 4}</b><span>cartes à cacher</span></div>
     </div>
     ${idle ? html`<div class="stack">
       <${Btn} kind="ghost" icon="tv" onClick=${() => send('core', 'screen', { screen: v.screen === 'intro' ? 'lobby' : 'intro' })}>${v.screen === 'intro' ? 'Revenir à l’accueil sur la TV' : 'Lancer l’intro sur la TV'}</${Btn}>
@@ -268,7 +279,7 @@ function Act1({ v, send, clock }) {
   const hints = Object.values(N.hints).filter((h) => !h.free).length;
   const solved = Object.keys(N.solved).length;
   return html`
-    <${Clock} N=${N} clock=${clock} label="avant que le cadenas ne s’ouvre de lui-même" />
+    <${Clock} N=${N} clock=${clock} label="avant que la cachette ne soit révélée d’elle-même" />
     <${TimeBtns} N=${N} send=${send} />
     <div class="stats" style="margin:12px 0"><div class="stat"><b>${Object.keys(N.found).length}</b><span>trouvées</span></div><div class="stat"><b>${solved}</b><span>résolues</span></div><div class="stat"><b>${hints}</b><span>coup${hints > 1 ? 's' : ''} de pouce</span></div><div class="stat"><b>${N.tries}</b><span>essais du code</span></div></div>
     <p class="label">Les énigmes</p>
@@ -277,14 +288,14 @@ function Act1({ v, send, clock }) {
       const s = N.solved[e.num];
       return html`<div class="erow" key=${e.num} style="cursor:default">
         <span class="n">${e.num}</span>
-        <span class="t">${e.q.length > 70 ? e.q.slice(0, 70) + '…' : e.q}<small>${e.room} · réponse : ${e.answers[0]}${e.sym === 'ghost' ? ' · leurre' : ''} · ${s ? `Résolue par ${names[s.pid] ? names[s.pid].name : '?'}` : f ? `Trouvée par ${names[f.pid] ? names[f.pid].name : '?'}, pas encore résolue` : 'Pas encore trouvée'}${N.hints[e.num] ? ' · coup de pouce donné' : ''}</small></span>
-        <span class="d"><${Icon} n=${SYM_ICON[e.sym]} s=${16} />${e.sym === 'ghost' ? html`<span title="leurre">${N.escape.decoy}</span>` : N.escape.code[N.escape.order.indexOf(e.sym)]}</span>
+        <span class="t">${e.q.length > 70 ? e.q.slice(0, 70) + '…' : e.q}<small>${e.room} · ${e.decoy ? 'leurre, aucune bonne réponse' : `réponse : ${e.answers[0]}`} · ${s ? `Résolue par ${names[s.pid] ? names[s.pid].name : '?'}` : f ? `Trouvée par ${names[f.pid] ? names[f.pid].name : '?'}, pas encore résolue` : 'Pas encore trouvée'}${N.hints[e.num] ? ' · coup de pouce donné' : ''}</small></span>
+        <span class="d">${e.decoy ? 'leurre' : html`<${Icon} n=${SYM_ICON[e.sym]} s=${16} />${N.escape.fragments ? N.escape.fragments[N.escape.order.indexOf(e.sym)] : N.escape.code[N.escape.order.indexOf(e.sym)]}`}</span>
       </div>`;
     })}
     <${Say} N=${N} send=${send} />
     <div class="stack" style="margin-top:8px">
       <${Btn} kind="dark" icon="sparkles" onClick=${() => send('nuit', 'hint')}>Révéler le coup de pouce d’une énigme trouvée</${Btn}>
-      <${Btn} kind="dark" confirm="Ouvrir le cadenas pour tout le monde ?" onClick=${() => send('nuit', 'next')}>Ouvrir le cadenas et lancer l’alerte</${Btn}>
+      <${Btn} kind="dark" confirm="Révéler la cachette pour tout le monde ?" onClick=${() => send('nuit', 'next')}>Révéler la cachette et lancer l’alerte</${Btn}>
     </div>
     <${Journal} N=${N} />`;
 }
@@ -372,7 +383,7 @@ function Act3({ v, pub, send, clock, gps, sim }) {
     <${Clock} N=${N} clock=${clock} label="avant le dernier départ" />
     <${TimeBtns} N=${N} send=${send} />
     <div class="stats" style="margin:12px 0"><div class="stat"><b>${N.count.monstres}</b><span>encore dehors</span></div><div class="stat"><b>${N.count.sauves}</b><span>sauvés</span></div><div class="stat"><b>${N.count.exorcises}</b><span>exorcisés</span></div></div>
-    <p class="small muted" style="margin:0 0 12px">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés cherchent le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés. Toi, tu ne déclenches rien en y allant.'}</p>
+    <p class="small muted" style="margin:0 0 12px">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés cherchent le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint en premier, tous les monstres qui arrivent après lui sont exorcisés. Toi, tu ne déclenches rien en y allant.'}</p>
     <p class="label">Les indices</p>
     ${(N.tiles || []).map((t) => html`<div class="erow" key=${t.k} style="cursor:default;opacity:${t.open ? 1 : 0.55}">
       <span class="n">${t.k + 1}</span><span class="t">${N.clues[t.k]}<small>${t.open ? 'Débloqué' : `Se débloque dans ${fmtShort(t.at - now)}`}</small></span></div>`)}
@@ -391,7 +402,7 @@ function Fin({ v, send }) {
       <div class="stat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
       <div class="stat"><b>${R.hunters.mj || 0}</b><span>captures pour toi</span></div>
     </div>
-    <p class="lead">${R.sealedBy ? (R.destroyed ? 'Le refuge a été détruit.' : 'Un exorcisé a atteint le refuge le premier.') : R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>
+    <p class="lead">${R.sealedBy ? (R.destroyed ? 'Le refuge a été détruit.' : 'Un exorcisé a pris le refuge.') : R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>
     <div class="stack" style="margin-top:16px">
       <${Btn} kind="ghost" confirm="Effacer les scores et revenir à l’accueil ?" onClick=${() => send('nuit', 'reset')}>Préparer une nouvelle partie</${Btn}>
     </div>`;

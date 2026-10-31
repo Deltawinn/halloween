@@ -289,7 +289,7 @@ function Evasion({ client, pub, v, clock }) {
     <nav class="tabs">
       <button class="tab ${tab === 'num' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('num'); }}><${Icon} n="hash" s=${20} />Numéro</button>
       <button class="tab ${tab === 'list' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('list'); }}><${Icon} n="list" s=${20} />Énigmes${found ? html`<span class="badge">${found}</span>` : null}</button>
-      ${allSolved ? html`<button class="tab ${tab === 'lock' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('lock'); }}><${Icon} n="key-round" s=${20} />Le cadenas<span class="badge">!</span></button>` : null}
+      ${allSolved ? html`<button class="tab ${tab === 'lock' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('lock'); }}><${Icon} n="key-round" s=${20} />${N.words ? 'L’ultime' : 'Le cadenas'}<span class="badge">!</span></button>` : null}
     </nav>`;
 }
 
@@ -337,7 +337,7 @@ function NumPad({ client, N, clock, head, onOpen }) {
 function EnigmaList({ N, head, onOpen }) {
   return html`${head}
     <${Ex} size=${50}>Les énigmes</${Ex}>
-    <p class="lead muted" style="margin:10px 0 18px">${N.total} cartes numérotées sont cachées dans la maison. Chaque bonne réponse révèle un chiffre et son symbole.</p>
+    <p class="lead muted" style="margin:10px 0 18px">${N.total} cartes numérotées sont cachées dans la maison. Chaque bonne réponse révèle un ${N.words ? 'fragment' : 'chiffre'} et son symbole.</p>
     ${N.enigmas.map((e, i) => e.found
       ? html`<button class="erow" onClick=${() => onOpen(e.num)}>
           <span class="n">${e.num}</span>
@@ -357,10 +357,10 @@ function Enigma({ client, e, N, close, head }) {
     <div class="card"><p class="just" style="white-space:pre-line">${e.q}</p></div>
     ${e.hint ? html`<div class="row" style="margin-top:8px"><${Icon} n="sparkles" s=${16} /><span class="small">${e.hint}</span></div>` : null}
     ${solved
-      ? html`<div class="row on" style="margin-top:16px"><${Icon} n=${SYM_ICON[e.sym]} s=${18} /><span class="lbl">${SYMBOLS[e.sym]} : ${e.digit}<small>Ce chiffre rejoint le cadenas.</small></span></div>`
+      ? html`<div class="row on" style="margin-top:16px"><${Icon} n=${SYM_ICON[e.sym]} s=${18} /><span class="lbl">${SYMBOLS[e.sym]} : ${e.digit}<small>${N.words ? 'Ce fragment rejoint les autres.' : 'Ce chiffre rejoint le cadenas.'}</small></span></div>`
       : html`<label class="field" style="margin-top:16px"><span class="label">Ta réponse</span>
           <input class="inp" value=${ans} placeholder="Un mot" onInput=${(x) => setAns(x.target.value)} onKeyDown=${(x) => { if (x.key === 'Enter' && ans.trim()) { client.act('nuit', 'answer', { num: e.num, text: ans }); setAns(''); } }} /></label>`}
-    <p class="label" style="margin-top:16px">Les chiffres trouvés, dans le désordre</p>
+    <p class="label" style="margin-top:16px">${N.words ? 'Les fragments trouvés' : 'Les chiffres trouvés'}, dans le désordre</p>
     <${Digits} N=${N} />
     <div class="bottom">
       ${solved ? html`<${Btn} kind="ghost" onClick=${close}>Retour</${Btn}>`
@@ -386,8 +386,22 @@ function Padlock({ client, N, head }) {
   if (N.solved < N.total) {
     return html`${head}
       <${Ex} size=${50}>Le cadenas</${Ex}>
-      <p class="lead muted" style="margin:10px 0 18px">Résous toutes les énigmes pour réunir les chiffres.</p>
+      <p class="lead muted" style="margin:10px 0 18px">Résous toutes les énigmes pour réunir les ${N.words ? 'fragments' : 'chiffres'}.</p>
       <${Digits} N=${N} />`;
+  }
+  if (N.words) {
+    return html`${head}
+      <${Ex} size=${50}>L’ultime<br />énigme</${Ex}>
+      <p class="lead" style="margin:12px 0 16px">Tous les indices sont réunis, une ultime réponse vous permettra de fuir.</p>
+      <${Digits} N=${N} />
+      <div class="card" style="margin-top:8px"><p class="disp" style="font-size:20px;line-height:1.4;color:var(--creme);white-space:pre-line">${N.ultimate}</p></div>
+      <label class="field" style="margin-top:16px"><span class="label">Où dorment les clés ?</span>
+        <input class="inp" value=${code} placeholder="Ta réponse" autocomplete="off" onInput=${(e) => setCode(e.target.value)}
+          onKeyDown=${(e) => { if (e.key === 'Enter' && code.trim()) { client.act('nuit', 'code', { code }); setCode(''); } }} /></label>
+      ${N.tries ? html`<p class="sub center">${plural(N.tries, 'tentative ratée', 'tentatives ratées')}.</p>` : null}
+      <div class="bottom">
+        <${Btn} icon="key-round" disabled=${!code.trim()} onClick=${() => { client.act('nuit', 'code', { code }); setCode(''); }}>Valider la réponse</${Btn}>
+      </div>`;
   }
   return html`${head}
     <${Ex} size=${50}>L’ultime<br />énigme</${Ex}>
@@ -445,7 +459,7 @@ function Flee({ N, clock, go }) {
     <div class="grow" style="min-height:34dvh"></div>
     <p class="eyebrow">${N.timedOut ? 'Le temps est écoulé' : `Évadés en ${took} min`}</p>
     <${Ex} size=${64} depth=${8}>Fuyez</${Ex}>
-    <p class="lead" style="margin-top:14px">${N.timedOut ? 'Le cadenas a été forcé, la clé est à vous.' : 'Le cadenas a cédé, la clé est à vous.'} L’alerte générale est déclenchée dans tout le quartier : le chasseur sort dans</p>
+    <p class="lead" style="margin-top:14px">${N.words ? `Les clés dormaient dans ${N.final || 'leur cachette'} : prenez-les et sortez.` : N.timedOut ? 'Le cadenas a été forcé, la clé est à vous.' : 'Le cadenas a cédé, la clé est à vous.'} L’alerte générale est déclenchée dans tout le quartier : le chasseur sort dans</p>
     <div class="big" style="margin-top:10px"><${Countdown} to=${N.huntAt} clock=${clock} /></div>
     <div class="bottom">
       <${Btn} icon="map" onClick=${go}>Voir la carte</${Btn}>
@@ -459,7 +473,7 @@ function EndAlert({ go, hunter, onlyHunters }) {
   const text = hunter
     ? (onlyHunters
       ? 'Tous les monstres ont été exorcisés. Retrouve leur refuge grâce aux indices et détruis-le avant le dernier départ.'
-      : 'Les monstres encore libres foncent vers leur refuge. Trouve-le grâce aux indices : si tu y arrives avant eux, tous les monstres encore dehors sont exorcisés.')
+      : 'Les monstres encore libres foncent vers leur refuge. Trouve-le grâce aux indices : si tu y arrives avant les monstres, tous ceux qui arrivent après toi sont exorcisés.')
     : 'Les chasseurs ont abandonné le secteur. Rejoins le refuge pour rentrer chez toi avant le dernier départ pour l’Hôtel Transylvanie.';
   return html`<div class="screen">
     <div class="scene-bg"><${Scene} name="rue" className="scene" style="width:100%;height:100%" /></div>
@@ -514,7 +528,7 @@ function MonsterMap({ client, pub, v, clock, gps, sim }) {
     ${seeHunters ? html`<p class="sub ok">Tu vois les chasseurs pendant encore <${Countdown} to=${N.seeUntil} clock=${clock} short />.</p>` : null}
     ${refuge ? html`
       <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 50 m du refuge, plus personne ne peut t’attraper.</span></div>
-      <div class="row"><${Icon} n="triangle-alert" s=${16} /><span class="small">Si un exorcisé atteint le refuge avant toi, tu es exorcisé.</span></div>
+      <div class="row"><${Icon} n="triangle-alert" s=${16} /><span class="small">Si un exorcisé est arrivé au refuge avant toi, tu y seras exorcisé.</span></div>
 ` : null}
     <div class="btns" style="margin-top:8px">
       <${Btn} icon="zap" kind=${N.power && N.power.used ? 'ghost' : 'primary'} onClick=${() => setSheet('power')}>${N.power && N.power.used ? 'Pouvoir utilisé' : 'Mon pouvoir'}</${Btn}>
@@ -664,7 +678,7 @@ function Hunter({ client, pub, v, clock, gps, sim }) {
   return html`<div class="screen">
     <${Head} act=${`Chasseurs : ${huntersNames}`} title=${refuge ? (N.onlyHunters ? 'Détruis le refuge' : 'La course') : 'La chasse'} to=${N.endsAt} clock=${clock}
       sub=${refuge ? 'avant le dernier départ' : 'avant la fin de l’alerte'} right=${plural((N.mine || []).length, 'exorcisme')} />
-    ${refuge ? html`<p class="small muted" style="margin:0 0 10px">${N.onlyHunters ? 'Retrouve le refuge grâce aux indices pour le détruire.' : 'Atteins le refuge avant les monstres : tous ceux encore dehors seront exorcisés.'} Chaque indice s’autodétruit dès qu’il est lu.</p>
+    ${refuge ? html`<p class="small muted" style="margin:0 0 10px">${N.onlyHunters ? 'Retrouve le refuge grâce aux indices pour le détruire.' : 'Atteins le refuge avant les monstres : tous ceux qui arrivent après toi seront exorcisés.'} Chaque indice s’autodétruit dès qu’il est lu.</p>
       <${Tiles} client=${client} N=${N} clock=${clock} onRead=${(k) => setShow(k)} />
       <div style="height:10px"></div>` : null}
     ${refuge ? null : html`<div style="position:relative;height:52dvh">
@@ -704,7 +718,7 @@ function Portal({ pub, v }) {
 
 // verdict de la nuit, partagé par le téléphone et la TV
 export function verdict(R, name) {
-  if (R.sealedBy) return R.destroyed ? `${name(R.sealedBy)} a détruit le refuge.` : `${name(R.sealedBy)} a atteint le refuge le premier : les monstres restés dehors sont exorcisés.`;
+  if (R.sealedBy) return R.destroyed ? `${name(R.sealedBy)} a détruit le refuge.` : `${name(R.sealedBy)} a pris le refuge : les monstres arrivés après lui ont été exorcisés.`;
   if (R.allCaught) return 'Tous les monstres ont été exorcisés.';
   if (R.saved.length) return `${R.saved.length} monstre${R.saved.length > 1 ? 's sont rentrés' : ' est rentré'} chez ${R.saved.length > 1 ? 'eux' : 'lui'}.`;
   return 'Le dernier portail est parti sans personne.';

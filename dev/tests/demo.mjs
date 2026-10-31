@@ -66,7 +66,7 @@ await p.setViewportSize({ width: 390, height: 844 });
 await view('Joueur');
 await p.waitForTimeout(500);
 await shot('20-evasion');
-const first = await p.evaluate(() => window.__host.E.S.nuit.escape.enigmas[1]);
+const first = await p.evaluate(() => window.__host.E.S.nuit.escape.enigmas.filter((e) => !e.decoy)[1]);
 await step('numero', async () => { for (const k of first.num) await p.locator('.keys button', { hasText: k }).first().click(); await click('Ouvrir'); });
 await p.waitForTimeout(800);
 await shot('21-enigme');
