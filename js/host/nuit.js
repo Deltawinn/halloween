@@ -93,7 +93,7 @@ export const nuit = {
         st: 'evasion', startAt: now, endsAt: now + N.cfg.evasion * MIN, pausedAt: 0,
         found: {}, solved: {}, hints: {}, tries: 0, escapedAt: 0, timedOut: false, head: 0,
         powers: {}, status: {}, exo: {}, saved: {}, pos: {}, hpos: {}, sights: [], out: {}, lastOut: {},
-        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null,
+        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], revivedAll: false,
       });
       for (const p of E.list()) {
         const known = p.monster && MONSTERS.find((x) => x.name === p.monster.name);
@@ -453,7 +453,7 @@ function base(E) {
   const N = E.S.nuit;
   return {
     st: N.st, endsAt: N.endsAt, startAt: N.startAt, huntAt: N.huntAt, nextSight: N.nextSight, refugeAt: N.refugeAt,
-    alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
+    alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, revivedAll: !!N.revivedAll, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
     head: N.head, escapedAt: N.escapedAt, timedOut: N.timedOut,
     count: { monstres: countSt(E, 'monstre'), exorcises: countSt(E, 'exorcise'), sauves: countSt(E, 'sauve') },
   };
@@ -528,17 +528,28 @@ function toRefuge(E) {
   const N = E.S.nuit;
   if (N.st !== 'alerte') return;
   const now = E.now();
+  // si tout le monde a été exorcisé, le portail rappelle toutes les âmes : l'acte 3 se joue quand même
+  const allCaught = !countSt(E, 'monstre') && E.ids().length > 0;
+  if (allCaught) {
+    for (const id of E.ids()) if (N.status[id] === 'exorcise') { N.status[id] = 'monstre'; delete N.exo[id]; }
+    N.revivedAll = true;
+  }
   N.st = 'refuge';
   N.refugeAt = now;
   N.endsAt = now + N.cfg.refuge * MIN;
   if (N.huntAt > now) N.huntAt = now;
+  if (allCaught) {
+    feed(E, 'Tous les monstres ont été exorcisés… mais le portail rappelle toutes les âmes. Course au refuge pour tout le monde.');
+    E.overlay({ kind: 'curse', title: 'Le portail vous rappelle', sub: 'Tous les monstres ont été exorcisés, mais le dernier portail réveille chaque âme. Rejoignez le point de rassemblement avant le dernier départ.', ms: 11000 });
+    for (const id of E.ids()) E.alert(id, 'Le portail te rappelle : tu redeviens un monstre. Rejoins le point de rassemblement !', 'ok', { page: 'refuge' });
+    return;
+  }
   feed(E, 'Fin de l’alerte générale. Les monstres cherchent le point de rassemblement.');
   E.overlay({ kind: 'clue', title: 'Fin de l’alerte', sub: 'Les monstres encore libres doivent rejoindre le point de rassemblement avant le dernier départ.', ms: 9000 });
   for (const id of E.ids()) {
     if (N.status[id] === 'monstre') E.alert(id, 'Bravo, les chasseurs ont abandonné le secteur. Rejoins le point de rassemblement.', 'ok', { page: 'refuge' });
     else E.alert(id, 'Les monstres cherchent leur point de rassemblement. Continuez la traque.', 'info');
   }
-  if (!countSt(E, 'monstre')) finish(E);
 }
 
 function finish(E) {
@@ -552,7 +563,8 @@ function finish(E) {
     saved: Object.entries(N.saved).sort((a, b) => a[1] - b[1]).map(([id, at]) => ({ id, at })),
     exo: Object.entries(N.exo).sort((a, b) => a[1].at - b[1].at).map(([id, x]) => ({ id, by: x.by, at: x.at })),
     lost,
-    hunters: countBy(Object.values(N.exo).map((x) => x.by)),
+    hunters: countBy((N.exoLog || []).map((x) => x.by)),
+    captures: (N.exoLog || []).length,
   };
   N.results.allCaught = !N.results.saved.length && !lost.length;
   feed(E, N.results.allCaught ? 'Tous les monstres ont été exorcisés : les chasseurs gagnent.' : 'Le dernier départ pour l’Hôtel Transylvanie a eu lieu.');
@@ -602,6 +614,7 @@ function exorcise(E, pid, by) {
   for (const id of pair) {
     N.status[id] = 'exorcise';
     N.exo[id] = { by, at: now };
+    (N.exoLog ||= []).push({ id, by, at: now });
     delete N.out[id];
   }
   const who = pair.map((id) => E.name(id)).join(' et ');
@@ -614,7 +627,10 @@ function exorcise(E, pid, by) {
   }
   for (const id of pair) E.alert(id, 'Tu as été exorcisé. Tu chasses désormais les monstres.', 'bad', { page: 'exorcise' });
   E.mjAlert(`Exorcisme : ${who}, par ${byName}.`, 'info');
-  if (!countSt(E, 'monstre')) finish(E);
+  if (!countSt(E, 'monstre')) {
+    if (N.st === 'alerte') toRefuge(E);
+    else finish(E);
+  }
 }
 
 function save(E, pid) {

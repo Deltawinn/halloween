@@ -138,7 +138,7 @@ function Evasion({ pub, clock }) {
         const e = N.enigmas.filter((x) => x.solvedBy)[i];
         return e ? html`<div><${Icon} n=${SYM_ICON[e.sym]} s=${30} /><b>${e.digit}</b></div>` : html`<div class="lock"><${Icon} n="lock" s=${30} /><b>?</b></div>`;
       })}</div>
-      ${N.ultimate ? html`<p class="tvlead" style="flex:1;font-family:Gloock;font-size:34px;line-height:1.3">${N.ultimate}</p>` : null}
+      ${N.ultimate ? html`<p class="tvlead" style="flex:1;font-family:Gloock;font-size:28px;line-height:1.35;white-space:pre-line">${N.ultimate}</p>` : null}
     </div>
     ${N.say ? html`<div class="tvsay"><span>Le maître du jeu murmure</span><p>${N.say.text}</p></div>` : null}
   </div>`;
@@ -205,7 +205,7 @@ function Fin({ pub }) {
       <${Ex} size=${150} depth=${12}>Fin de la nuit</${Ex}>
       <div style="display:flex;gap:14px;margin-top:50px">
         <div class="tvstat"><b>${R.saved.length}</b><span>monstres sauvés</span></div>
-        <div class="tvstat"><b>${R.exo.length}</b><span>exorcisés</span></div>
+        <div class="tvstat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
         <div class="tvstat"><b>${R.hunters.mj || 0}</b><span>captures pour ${mj}</span></div>
       </div>
       <div style="margin-top:50px"><${Cast} pub=${pub} size=${80} cols=${10} gap=${10} statusOf=${statusFn(N)} /></div>

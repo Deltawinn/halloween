@@ -404,7 +404,7 @@ function Fin({ v, send }) {
   return html`
     <div class="stats" style="margin-bottom:14px">
       <div class="stat"><b>${R.saved.length}</b><span>sauvés</span></div>
-      <div class="stat"><b>${R.exo.length}</b><span>exorcisés</span></div>
+      <div class="stat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
       <div class="stat"><b>${R.hunters.mj || 0}</b><span>captures pour toi</span></div>
     </div>
     <p class="lead">${R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>

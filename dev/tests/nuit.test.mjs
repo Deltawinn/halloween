@@ -113,4 +113,20 @@ const res = E.S.nuit.results;
 assert.equal(res.saved.length, 6);
 assert.equal(res.exo.length, 4);
 JSON.stringify(E.publicView({})); JSON.stringify(E.mjView());
+
+// tout le monde attrapé pendant l'alerte : le portail les rappelle, l'acte 3 se joue quand même
+E.handle({ mj: true }, { g: 'nuit', a: 'reset' });
+E.handle({ mj: true }, { g: 'nuit', a: 'start' });
+E.handle({ mj: true }, { g: 'nuit', a: 'next' });
+assert.equal(E.S.nuit.st, 'alerte');
+for (const id of ids) act(id, 'caught', { by: 'mj' });
+act('p4', 'caught', { by: 'mj' }); // Jason se relève une première fois
+assert.equal(E.S.nuit.st, 'refuge', 'acte 3 même si tout le monde est exorcisé');
+assert.ok(ids.every((id) => E.S.nuit.status[id] === 'monstre'), 'tout le monde redevient monstre');
+assert.ok(E.publicView({}).nuit.revivedAll);
+T += 25 * MIN; E.tick();
+assert.equal(E.S.nuit.st, 'fin');
+assert.equal(E.S.nuit.results.captures, 10, 'les captures de l’acte 2 restent comptées');
+assert.equal(E.S.nuit.results.lost.length, 10, 'personne n’a rejoint le refuge');
+assert.equal(E.S.nuit.results.hunters.mj, 10);
 console.log('nuit : OK');

@@ -46,11 +46,13 @@ export const CUSTOM_POWERS = ['hide', 'decoy', 'fake', 'see', 'hide5', 'blind'];
 export const SYMBOLS = { skull: 'Le crâne', moon: 'La lune', eye: 'L\'œil', flame: 'La flamme' };
 
 // L'évasion : chaque énigme a pour réponse un chiffre du cadenas.
-// L'ultime énigme donne l'ordre des symboles : crâne, lune, œil, flamme → 2 6 3 9.
+// L'ultime énigme donne l'ordre des symboles, en devinettes : la tête sans chair (crâne),
+// ce qui change l'homme en loup (lune), ce qui voit tout (œil), ce qui brûlait les sorcières (flamme)
+// → crâne, lune, œil, flamme → 2 6 3 9.
 export const DEFAULT_ESCAPE = {
   code: '2639',
   order: ['skull', 'moon', 'eye', 'flame'],
-  ultimate: 'Le crâne ouvre la marche. La lune se lève avant que l\'œil ne s\'ouvre. La flamme, elle, s\'éteint toujours en dernier.',
+  ultimate: 'Quatre gardiens dorment sur la porte. Lis le code dans l\'ordre de leur réveil.\nCelui qui change l\'homme en loup ne se lève qu\'après que la tête sans chair a parlé.\nCelui qui brûlait les sorcières s\'allume le dernier, quand tous les autres le regardent.\nCelui qui voit tout n\'ouvre ses paupières qu\'une fois le loup réveillé.',
   enigmas: [
     {
       num: '13', room: 'Salon', sym: 'skull',

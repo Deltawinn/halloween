@@ -407,7 +407,7 @@ function Padlock({ client, N, head }) {
     <${Ex} size=${50}>L’ultime<br />énigme</${Ex}>
     <p class="lead" style="margin:12px 0 16px">Tous les indices sont réunis, une ultime réponse vous permettra de fuir.</p>
     <${Digits} N=${N} />
-    <div class="card" style="margin-top:8px"><p class="disp" style="font-size:21px;line-height:1.35;color:var(--creme)">${N.ultimate}</p></div>
+    <div class="card" style="margin-top:8px"><p class="disp" style="font-size:20px;line-height:1.4;color:var(--creme);white-space:pre-line">${N.ultimate}</p></div>
     <p class="label" style="margin-top:16px">Le code du cadenas</p>
     <div style="position:relative">
       <div class="digits">${[0, 1, 2, 3].map((i) => html`<b class="${i === code.length ? 'cur' : ''} ${code[i] ? '' : 'e'}">${code[i] || '·'}</b>`)}</div>
@@ -446,7 +446,7 @@ function Outside({ client, pub, v, clock }) {
     return html`<${Hunter} client=${client} pub=${pub} v=${v} clock=${clock} gps=${gps} sim=${sim} />`;
   }
   if (N.st === 'alerte' && !seenFlee) return html`<${Flee} N=${N} clock=${clock} go=${() => setFlee(true)} />`;
-  if (N.st === 'refuge' && !seenRefuge) return html`<${EndAlert} go=${() => setRefuge(true)} />`;
+  if (N.st === 'refuge' && !seenRefuge) return html`<${EndAlert} revived=${N.revivedAll} go=${() => setRefuge(true)} />`;
   return html`<${MonsterMap} client=${client} pub=${pub} v=${v} clock=${clock} gps=${gps} sim=${sim} />
     ${N.out && outLocal ? html`<${OutZone} N=${N} pos=${gps.pos} clock=${clock} back=${sim && N.center ? () => { setOutLocal(false); gps.moveTo(N.center); } : null} />` : null}`;
 }
@@ -467,13 +467,13 @@ function Flee({ N, clock, go }) {
   </div>`;
 }
 
-function EndAlert({ go }) {
+function EndAlert({ go, revived }) {
   return html`<div class="screen">
     <div class="scene-bg"><${Scene} name="rue" className="scene" style="width:100%;height:100%" /></div>
     <div class="grow" style="min-height:30dvh"></div>
     <p class="eyebrow">Fin de l’alerte générale</p>
-    <${Ex} size=${64} depth=${8}>Bravo</${Ex}>
-    <p class="lead" style="margin-top:14px">Les chasseurs ont abandonné le secteur. Rejoins le point de rassemblement avant le dernier départ pour l’Hôtel Transylvanie.</p>
+    <${Ex} size=${revived ? 48 : 64} depth=${8}>${revived ? html`Le portail<br />te rappelle` : 'Bravo'}</${Ex}>
+    <p class="lead" style="margin-top:14px">${revived ? 'Tous les monstres ont été exorcisés, mais le dernier portail réveille chaque âme. Tu redeviens un monstre : rejoins le point de rassemblement avant le dernier départ pour l’Hôtel Transylvanie.' : 'Les chasseurs ont abandonné le secteur. Rejoins le point de rassemblement avant le dernier départ pour l’Hôtel Transylvanie.'}</p>
     <p class="lead ok" style="margin-top:12px">Attention aux chasseurs qui rôdent dans la ville.</p>
     <div class="bottom"><${Btn} icon="lock-open" onClick=${go}>Voir les indices</${Btn}></div>
   </div>`;
@@ -716,7 +716,7 @@ function Results({ client, pub, v }) {
     <${Ex} size=${56} depth=${7}>Fin de<br />la nuit</${Ex}>
     <div class="stats" style="margin:20px 0 16px">
       <div class="stat"><b>${R.saved.length}</b><span>sauvés</span></div>
-      <div class="stat"><b>${R.exo.length}</b><span>exorcisés</span></div>
+      <div class="stat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
       <div class="stat"><b>${mjCaught}</b><span>captures pour ${pub.mjName.split(' ')[0]}</span></div>
     </div>
     <p class="label">Les monstres</p>
