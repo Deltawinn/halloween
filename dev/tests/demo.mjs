@@ -21,10 +21,11 @@ await step('demo', async () => { await click('Lancer la démo'); await p.waitFor
 await shot('01-mj-nuit');
 await step('zone', async () => { await tab('Démo'); await click('Placer la zone autour de moi'); await p.waitForTimeout(800); });
 await shot('02-mj-demo');
-await tab('Terrain');
+await tab('Préparation');
+await p.locator('.section-h', { hasText: 'Terrain' }).click();
 await p.waitForTimeout(1500);
 await shot('03-mj-terrain');
-await tab('Énigmes');
+await p.locator('.section-h', { hasText: 'Énigmes' }).click();
 await p.waitForTimeout(300);
 await shot('04-mj-enigmes');
 
@@ -45,22 +46,11 @@ await step('monstre', async () => { await p.locator('.mt', { hasText: 'Ghostface
 await p.waitForTimeout(600);
 await shot('14-fiche');
 await step('fiche', () => click('Valider ma fiche'));
-await p.waitForTimeout(600);
-await shot('15-binome');
-let free = await p.locator('.frow:not(.off)').count();
-if (!free) {
-  await view('MJ');
-  await tab('Nuit');
-  await p.locator('.frow .tag', { hasText: 'délier' }).first().click();
-  await view('Joueur');
-  await p.waitForTimeout(600);
-}
-await step('binome', async () => { await p.locator('.frow:not(.off)').first().click(); await click('Sceller notre sort'); });
-await p.waitForTimeout(2500);
+await p.waitForTimeout(2000);
 await shot('16-attente');
 
 await view('MJ');
-await tab('Nuit');
+await tab('Préparation');
 await p.waitForTimeout(300);
 await shot('05-mj-lobby');
 await step('lancer', async () => { await click('Lancer la partie'); await click('Lancer la nuit maintenant ?'); });
@@ -79,7 +69,7 @@ await shot('20-evasion');
 await step('numero', async () => { for (const k of '237') await p.locator('.keys button', { hasText: k }).first().click(); await click('Ouvrir'); });
 await p.waitForTimeout(800);
 await shot('21-enigme');
-await step('reponse', async () => { await p.locator('input.inp').fill('quinze'); await click('Valider la réponse'); });
+await step('reponse', async () => { await p.locator('input.inp').fill('six'); await click('Valider la réponse'); });
 await p.waitForTimeout(800);
 await shot('22-enigme-ok');
 for (let i = 0; i < 50; i++) {
@@ -103,7 +93,7 @@ await p.waitForTimeout(500);
 await shot('26-pouvoir');
 await click('Plus tard');
 await view('MJ');
-await tab('Chasse');
+await tab('Acte 2');
 await p.waitForTimeout(2500);
 await shot('07-mj-chasse');
 await p.locator('.seg button', { hasText: 'Vue arbitre' }).click();
@@ -136,10 +126,10 @@ await p.waitForTimeout(2000);
 await shot('29b-chasseur');
 // le MJ le ramène, puis on attend le refuge
 await view('MJ');
-await tab('Nuit');
+await tab('Acte 2');
 await p.waitForTimeout(500);
-await step('ramener', async () => { await p.locator('.frow', { hasText: 'Testeur' }).click(); await click('Redevenir monstre'); await click('Le ramener ?'); });
-await step('refuge', async () => { await click('Passer au refuge'); await click('Finir l’alerte maintenant ?'); await p.waitForTimeout(1500); });
+await step('ramener', async () => { await p.locator('.frow', { hasText: 'Testeur' }).last().click(); await click('Redevenir monstre'); await click('Le ramener ?'); });
+await step('refuge', async () => { await click('Finir l’alerte et passer au refuge'); await click('Finir l’alerte maintenant ?'); await p.waitForTimeout(1500); });
 await shot('09-mj-refuge');
 await view('Joueur');
 await p.waitForTimeout(1000);
@@ -158,8 +148,8 @@ await p.waitForTimeout(1500);
 await shot('32-tv-refuge');
 await p.setViewportSize({ width: 390, height: 844 });
 await view('MJ');
-await tab('Nuit');
-await step('sauver', async () => { await p.locator('.frow', { hasText: 'Testeur' }).click(); await click('Le sauver'); await click('Sauver ?'); });
+await tab('Acte 3');
+await step('sauver', async () => { await p.locator('.frow', { hasText: 'Testeur' }).last().click(); await click('Le sauver'); await click('Sauver ?'); });
 await view('Joueur');
 await p.waitForTimeout(1500);
 await shot('43-portail');

@@ -128,3 +128,94 @@ export function botFace(seed) {
   }
   return gridToPng(L);
 }
+
+// ---------- portraits stylisés à partir d'un selfie ----------
+const RAMP = [[8, 3, 1], [42, 14, 4], [125, 48, 10], [255, 122, 26], [255, 208, 160], [255, 240, 224]];
+
+function rampColor(t) {
+  const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(x));
+  const f = x - i;
+  return RAMP[i].map((c, k) => Math.round(c + (RAMP[i + 1][k] - c) * f));
+}
+
+// recadre le visage en couleur, carré de 192 px
+export function grab(src, sw, sh, { mirror = true } = {}) {
+  const side = Math.min(sw, sh) * 0.86;
+  const sx = (sw - side) / 2;
+  const sy = Math.max(0, (sh - side) / 2 - side * 0.04);
+  const c = canvas(192, 192);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.imageSmoothingQuality = 'high';
+  if (mirror) { x.translate(192, 0); x.scale(-1, 1); }
+  x.drawImage(src, sx, sy, side, side, 0, 0, 192, 192);
+  return c;
+}
+
+// luminance normalisée sur le visage (niveaux automatiques)
+function lum(c, n) {
+  const k = canvas(n, n);
+  const x = k.getContext('2d', { willReadFrequently: true });
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(c, 0, 0, n, n);
+  const d = x.getImageData(0, 0, n, n).data;
+  const L = new Float32Array(n * n);
+  const inner = [];
+  for (let i = 0; i < n * n; i++) {
+    const l = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+    L[i] = l;
+    const u = (i % n) / n - 0.5;
+    const v = Math.floor(i / n) / n - 0.45;
+    if ((u * u) / 0.07 + (v * v) / 0.12 < 1) inner.push(l);
+  }
+  inner.sort((a, b) => a - b);
+  const lo = inner[Math.floor(inner.length * 0.03)] ?? 0;
+  const hi = inner[Math.floor(inner.length * 0.98)] ?? 1;
+  const span = Math.max(0.1, hi - lo);
+  for (let i = 0; i < n * n; i++) L[i] = Math.max(0, Math.min(1, (L[i] - lo) / span));
+  return L;
+}
+
+// trois styles au choix : pixel (48 px, tramé), affiche (dégradé de la nuit), VHS (lignes, grain, vignette)
+export function stylize(c, style) {
+  if (!hasDom || !c) return null;
+  if (style === 'pixel') {
+    const n = 48;
+    const L = lum(c, n);
+    const out = canvas(n, n);
+    const x = out.getContext('2d');
+    const img = x.createImageData(n, n);
+    for (let i = 0; i < n * n; i++) {
+      const u = i % n;
+      const v = Math.floor(i / n);
+      const t = Math.pow(L[i], 0.9) * 0.94 + 0.03 + (BAYER[v % 4][u % 4] / 16 - 0.47) * 0.09;
+      const [r, g, b] = rampColor(Math.round(Math.max(0, Math.min(1, t)) * 5) / 5);
+      img.data.set([r, g, b, 255], i * 4);
+    }
+    x.putImageData(img, 0, 0);
+    return out.toDataURL('image/png');
+  }
+  const n = 128;
+  const L = lum(c, n);
+  const out = canvas(n, n);
+  const x = out.getContext('2d');
+  const img = x.createImageData(n, n);
+  const vhs = style === 'vhs';
+  for (let i = 0; i < n * n; i++) {
+    const u = (i % n) / n - 0.5;
+    const v = Math.floor(i / n) / n - 0.5;
+    let t = Math.pow(L[i], 0.85);
+    if (vhs) {
+      t = t * 0.92 + (Math.random() - 0.5) * 0.12;
+      if (Math.floor(i / n) % 3 === 0) t *= 0.72;
+      t *= 1 - 0.9 * Math.max(0, Math.hypot(u, v) - 0.36);
+    } else {
+      t = 0.04 + t * 0.92;
+      t *= 1 - 0.6 * Math.max(0, Math.hypot(u, v) - 0.45);
+    }
+    const [r, g, b] = rampColor(t * (vhs ? 0.88 : 0.96));
+    img.data.set([r, g, b, 255], i * 4);
+  }
+  x.putImageData(img, 0, 0);
+  return out.toDataURL('image/jpeg', 0.8);
+}

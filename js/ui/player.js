@@ -6,7 +6,7 @@ import {
 import { GameMap } from './map.js';
 import { useGps } from './gps.js';
 import { unlockAudio, play } from './sound.js';
-import { pixelate, botFace } from '../pixel.js';
+import { grab, stylize, botFace } from '../pixel.js';
 import { MONSTERS, SYMBOLS } from '../data.js';
 import { store } from '../net.js';
 import { haversine } from '../host/util.js';
@@ -23,7 +23,11 @@ export function PlayerApp({ client }) {
   useSource(client);
   const pub = client.pub;
   const v = client.priv;
-  const clock = () => client.now();
+  // en pause, tous les chronos se figent
+  const clock = () => {
+    const n = (client.priv && client.priv.nuit) || (client.pub && client.pub.nuit);
+    return (n && n.pausedAt) || client.now();
+  };
   useEffect(() => {
     const wake = () => { unlockAudio(); keepAwake(); };
     document.addEventListener('pointerdown', wake, { once: true });
@@ -63,10 +67,10 @@ function Opening({ client }) {
 
 function Onboard({ client, pub }) {
   const [step, setStep] = useState(1);
-  const [avatar, setAvatar] = useState(null);
+  const [shot, setShot] = useState(null);
   if (step === 1) return html`<${Welcome} pub=${pub} onGo=${() => { unlockAudio(); keepAwake(); setStep(2); }} />`;
-  if (step === 2) return html`<${Selfie} onDone=${(a) => { setAvatar(a); setStep(3); }} />`;
-  return html`<${Portrait} avatar=${avatar} retake=${() => setStep(2)} onDone=${async (first, last) => {
+  if (step === 2) return html`<${Selfie} onDone=${(x) => { setShot(x); setStep(3); }} />`;
+  return html`<${Portrait} shot=${shot} names retake=${() => setStep(2)} onDone=${async (avatar, first, last) => {
     if (!client.id) await client.register(first);
     client.send({ a: 'identity', first, last });
     if (avatar) client.send({ a: 'avatar', data: avatar });
@@ -116,18 +120,19 @@ function Selfie({ onDone }) {
     if (!vd || !vd.videoWidth) return;
     setState('scan');
     play('clue');
-    setTimeout(() => onDone(pixelate(vd, vd.videoWidth, vd.videoHeight, { mirror: true })), 1600);
+    const c = grab(vd, vd.videoWidth, vd.videoHeight, { mirror: true });
+    setTimeout(() => onDone({ canvas: c }), 1400);
   };
   const fromFile = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     const img = new Image();
-    img.onload = () => { onDone(pixelate(img, img.naturalWidth, img.naturalHeight, { mirror: false })); URL.revokeObjectURL(img.src); };
+    img.onload = () => { onDone({ canvas: grab(img, img.naturalWidth, img.naturalHeight, { mirror: false }) }); URL.revokeObjectURL(img.src); };
     img.src = URL.createObjectURL(f);
   };
   return html`<div class="screen">
-    <div class="topbar"><span>Ton identité</span><span>1 sur 4</span></div>
-    <${Steps} n=${1} of=${4} />
+    <div class="topbar"><span>Ton identité</span><span>1 sur 3</span></div>
+    <${Steps} n=${1} of=${3} />
     <${Ex} size=${52}>Analyse de<br />ton visage</${Ex}>
     <div class="cam" style="margin-top:22px">
       <video ref=${video} playsinline muted autoplay></video>
@@ -143,28 +148,39 @@ function Selfie({ onDone }) {
       ${state === 'error'
         ? html`<${Btn} icon="camera" onClick=${() => file.current.click()}>Prendre la photo</${Btn}>`
         : html`<${Btn} icon="scan-face" disabled=${state !== 'live'} onClick=${scan}>Lancer l’analyse</${Btn}>`}
-      <button class="link" onClick=${() => onDone(botFace(Math.floor(Math.random() * 9999)))}>Pas de caméra ? Portrait mystère</button>
+      <button class="link" onClick=${() => onDone({ data: botFace(Math.floor(Math.random() * 9999)) })}>Pas de caméra ? Portrait mystère</button>
     </div>
   </div>`;
 }
 
-function Portrait({ avatar, retake, onDone, busy }) {
+const STYLES = [['affiche', 'Affiche'], ['vhs', 'VHS'], ['pixel', 'Pixel']];
+
+function Portrait({ shot, retake, onDone, names }) {
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
+  const [style, setStyle] = useState('affiche');
   const [sending, setSending] = useState(false);
-  const ok = first.trim().length > 0;
+  const looks = useMemo(() => {
+    if (!shot) return {};
+    if (shot.data) return { pixel: shot.data };
+    return Object.fromEntries(STYLES.map(([k]) => [k, stylize(shot.canvas, k)]));
+  }, [shot]);
+  const keys = STYLES.filter(([k]) => looks[k]);
+  const pick = looks[style] ? style : keys[0] && keys[0][0];
+  const avatar = looks[pick];
+  const ok = !names || first.trim().length > 0;
   return html`<div class="screen">
-    <div class="topbar"><span>Ton identité</span><span>2 sur 4</span></div>
-    <${Steps} n=${2} of=${4} />
+    ${names ? html`<div class="topbar"><span>Ton identité</span><span>2 sur 3</span></div><${Steps} n=${2} of=${3} />` : null}
     <${Ex} size=${52}>Ton portrait</${Ex}>
-    <div class="portrait" style="margin-top:22px"><${Av} src=${avatar} size=${168} /></div>
-    <div class="pills" style="justify-content:center"><${Pill} icon="sparkles">32 × 32 pixels</${Pill}><${Pill}>Palette de la nuit</${Pill}></div>
-    <div class="two" style="margin-top:22px">
+    <div class="portrait" style="margin-top:20px"><${Av} src=${avatar} size=${168} /></div>
+    ${keys.length > 1 ? html`<div class="seg">${keys.map(([k, l]) => html`<button class=${pick === k ? 'on' : ''} onClick=${() => setStyle(k)}>${l}</button>`)}</div>
+      <p class="sub center">Choisis le style qui te ressemble le plus.</p>` : null}
+    ${names ? html`<div class="two" style="margin-top:18px">
       <label class="field"><span class="label">Prénom</span><input class="inp" value=${first} maxlength="18" autocomplete="given-name" onInput=${(e) => setFirst(e.target.value)} /></label>
       <label class="field"><span class="label">Nom</span><input class="inp" value=${last} maxlength="24" autocomplete="family-name" onInput=${(e) => setLast(e.target.value)} /></label>
-    </div>
+    </div>` : null}
     <div class="bottom">
-      <${Btn} disabled=${!ok || sending || !avatar} onClick=${async () => { setSending(true); await onDone(first.trim(), last.trim()); }}>${sending ? 'Ouverture…' : 'Continuer'}</${Btn}>
+      <${Btn} disabled=${!ok || sending || !avatar} onClick=${async () => { setSending(true); await onDone(avatar, first.trim(), last.trim()); }}>${sending ? 'Ouverture…' : names ? 'Continuer' : 'Garder ce portrait'}</${Btn}>
       <button class="link" onClick=${retake}>Reprendre la photo</button>
     </div>
   </div>`;
@@ -174,14 +190,15 @@ function Lobby({ client, pub, v }) {
   const me = v.me;
   const [fiche, setFiche] = useFlag(client, 'fiche');
   const [edit, setEdit] = useState(null);
-  if (edit === 'photo') return html`<${Selfie} onDone=${(a) => { client.send({ a: 'avatar', data: a }); setEdit(null); }} />`;
+  const [shot, setShot] = useState(null);
+  if (edit === 'photo') return html`<${Selfie} onDone=${(x) => { setShot(x); setEdit('style'); }} />`;
+  if (edit === 'style') return html`<${Portrait} shot=${shot} retake=${() => setEdit('photo')} onDone=${(a) => { client.send({ a: 'avatar', data: a }); setEdit(null); }} />`;
   if (!me.av && !edit) {
     return html`<div class="screen"><div class="grow"></div><p class="lead center muted">Envoi de ton portrait…</p><div class="grow"></div>
       <button class="link" onClick=${() => setEdit('photo')}>Reprendre la photo</button></div>`;
   }
   if (!me.monster || edit === 'monster') return html`<${Monster} client=${client} pub=${pub} me=${me} done=${() => setEdit(null)} />`;
   if (!fiche) return html`<${Fiche} me=${me} ok=${() => setFiche(true)} editPhoto=${() => setEdit('photo')} editMonster=${() => setEdit('monster')} />`;
-  if (!me.bound) return html`<${Binome} client=${client} pub=${pub} me=${me} back=${() => setFiche(false)} />`;
   return html`<${Waiting} pub=${pub} me=${me} back=${() => setFiche(false)} />`;
 }
 
@@ -198,8 +215,8 @@ function Monster({ client, pub, me, done }) {
     done();
   };
   return html`<div class="screen">
-    <div class="topbar"><span>Ton identité</span><span>3 sur 4</span></div>
-    <${Steps} n=${3} of=${4} />
+    <div class="topbar"><span>Ton identité</span><span>3 sur 3</span></div>
+    <${Steps} n=${3} of=${3} />
     <${Ex} size=${52}>Ton rôle</${Ex}>
     <p class="lead muted" style="margin:10px 0 16px">Choisis le monstre de ton costume.</p>
     ${custom != null
@@ -220,8 +237,8 @@ function Monster({ client, pub, me, done }) {
 
 function Fiche({ me, ok, editPhoto, editMonster }) {
   return html`<div class="screen">
-    <div class="topbar"><span>Ton identité</span><span>4 sur 4</span></div>
-    <${Steps} n=${4} of=${4} />
+    <div class="topbar"><span>Ton identité</span><span>Ta fiche</span></div>
+    <${Steps} n=${3} of=${3} />
     <${Ex} size=${52}>Ta fiche</${Ex}>
     <div class="card" style="margin-top:22px;display:flex;gap:16px;align-items:center">
       <button style="background:none;border:0;padding:0" onClick=${editPhoto}><${Av} src=${me.av} size=${84} /></button>
@@ -244,38 +261,9 @@ function Fiche({ me, ok, editPhoto, editMonster }) {
   </div>`;
 }
 
-function Binome({ client, pub, me, back }) {
-  const others = (pub.players || []).filter((p) => p.id !== me.id);
-  const wantsMe = new Set(me.wantedBy || []);
-  const [sel, setSel] = useState(me.want);
-  const selP = others.find((p) => p.id === sel);
-  return html`<div class="screen">
-    <${Ex} size=${46}>Lie ton sort</${Ex}>
-    <p class="lead muted" style="margin:12px 0 18px">Choisis la personne qui t’accompagnera cette nuit. Ce choix scellera votre sort jusqu’à la fin.</p>
-    ${!others.length ? html`<p class="muted">Personne d’autre n’est encore arrivé. Patiente un peu.</p>` : null}
-    ${others.map((p) => {
-      const off = !!p.bound;
-      const chose = wantsMe.has(p.id);
-      return html`<button key=${p.id} class="frow ${sel === p.id ? 'on' : ''} ${off ? 'off' : ''}" disabled=${off} onClick=${() => setSel(p.id)}>
-        <${Av} src=${p.av} size=${36} />
-        <span class="fname"><b>${p.name} ${p.last || ''}</b><span>${p.mon || 'Sans monstre'}</span></span>
-        ${off ? html`<span class="tag grey">déjà lié</span>` : chose ? html`<span class="tag">t’a choisi</span>` : null}
-        ${!off ? html`<span class="chk ${sel === p.id ? 'on' : ''}">${sel === p.id ? html`<${Icon} n="check" s=${14} />` : null}</span>` : null}
-      </button>`;
-    })}
-    <div class="bottom sticky">
-      ${selP && wantsMe.has(selP.id) ? html`<div class="row on"><${Icon} n="link" s=${16} /><span class="small">${selP.name} t’a choisi aussi.</span></div>` : null}
-      ${me.want && me.want === sel && !wantsMe.has(sel) ? html`<div class="row"><${Icon} n="hourglass" s=${16} /><span class="small">En attente de la réponse de ${selP ? selP.name : '…'}.</span></div>` : null}
-      <${Btn} disabled=${!sel || me.want === sel} onClick=${() => client.send({ a: 'choose', pid: sel })}>Sceller notre sort</${Btn}>
-      <button class="link" onClick=${back}>Ce choix est définitif. Revoir ma fiche</button>
-    </div>
-  </div>`;
-}
-
 function Waiting({ pub, me, back }) {
   const ps = pub.players || [];
-  const ready = ps.filter((p) => p.mon && p.bound).length;
-  const mate = ps.find((p) => p.id === me.bound);
+  const ready = ps.filter((p) => p.mon && p.av).length;
   return html`<div class="screen">
     <div class="scene-bg"><${Scene} name="porte" className="scene" style="width:100%;height:100%" /></div>
     <div class="fade" style="background:linear-gradient(180deg,rgba(0,0,0,.7),transparent 30%,transparent 50%,#000 72%)"></div>
@@ -283,11 +271,10 @@ function Waiting({ pub, me, back }) {
     <${Ex} size=${50}>La nuit va<br />commencer</${Ex}>
     <div class="grow" style="min-height:30dvh"></div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;justify-items:center">
-      ${ps.map((p) => html`<${Av} key=${p.id} src=${p.av} size=${46} className=${p.bound ? '' : 'dimmed'} />`)}
+      ${ps.map((p) => html`<${Av} key=${p.id} src=${p.av} size=${46} />`)}
     </div>
     <div class="pills" style="margin-top:14px">
       <${Pill} or icon="users">${ready} monstre${ready > 1 ? 's' : ''} prêt${ready > 1 ? 's' : ''} sur ${ps.length}</${Pill}>
-      ${mate ? html`<${Pill} icon="link">lié à ${mate.name}</${Pill}>` : null}
     </div>
     <p class="small muted" style="margin-top:14px">Le maître du jeu lance la partie depuis son téléphone. Garde cette page ouverte.</p>
     <button class="link" style="text-align:left;padding-top:6px" onClick=${back}>Revoir ma fiche</button>
@@ -350,6 +337,7 @@ function NumPad({ client, N, clock, head, onOpen }) {
       <${Pill} or>${plural(N.solved, 'énigme résolue', 'énigmes résolues')} sur 4</${Pill}>
       <${Pill}>${N.solved} chiffre${N.solved > 1 ? 's' : ''} sur 4</${Pill}>
     </div>
+    ${N.say ? html`<div class="row on" style="margin:-6px 0 14px"><${Icon} n="sparkles" s=${16} /><span class="small">Le maître du jeu : ${N.say.text}</span></div>` : null}
     <p class="label">Tu as trouvé un numéro ? Tape-le.</p>
     <div class="digits">${[0, 1, 2, 3].map((i) => html`<b class="${i === code.length ? 'cur' : ''} ${code[i] ? '' : 'e'}">${code[i] || '·'}</b>`)}</div>
     <div class="keys" style="margin-top:16px">
@@ -512,17 +500,16 @@ function MonsterMap({ client, pub, v, clock, gps, sim }) {
   const [show, setShow] = useState(null);
   const refuge = N.st === 'refuge';
   const people = client.names();
-  const mate = v.me.bound && people[v.me.bound];
   const seeHunters = N.seeUntil && N.seeUntil > clock();
   const marks = seeHunters ? Object.entries(N.hpos || {}).map(([id, p]) => ({ id, lat: p.lat, lng: p.lng, kind: 'chasseur', av: id === 'mj' ? null : people[id] && people[id].av, label: id === 'mj' ? pub.mjName.split(' ')[0] : people[id] && people[id].name })) : [];
   const map = html`<${GameMap} center=${N.center} radius=${N.radius} me=${gps.pos}
-    mate=${N.matePos && mate ? { ...N.matePos, av: mate.av, label: mate.name } : null} marks=${marks}
+    marks=${marks} mapStyle=${N.mapStyle}
     onTap=${sim ? (p) => gps.moveTo(p) : null} className="" />`;
   if (show != null) return html`<${ClueRead} N=${N} k=${show} clock=${clock} speed=${pub.speed || 1} close=${() => setShow(null)} />`;
   return html`<div class="screen has-slide">
     ${refuge
       ? html`<${Head} act="Acte 3" title="Le refuge" to=${N.endsAt} clock=${clock} sub="avant le dernier départ" right=${`${plural(N.count.sauves, 'monstre arrivé', 'monstres arrivés')}`} />`
-      : html`<${Head} act="Acte 2" title=${html`Alerte<br />générale`} to=${N.endsAt} clock=${clock} sub="avant la fin de l’alerte" right=${mate ? `Lié à ${mate.name}` : ''} />`}
+      : html`<${Head} act="Acte 2" title=${html`Alerte<br />générale`} to=${N.endsAt} clock=${clock} sub="avant la fin de l’alerte" right="Chacun pour soi" />`}
     ${refuge ? html`
       <p class="small muted" style="margin:0 0 10px">Chaque indice se déverrouille à son heure. Il s’autodétruit dès que tu l’as lu.</p>
       <${Tiles} client=${client} N=${N} clock=${clock} onRead=${(k) => setShow(k)} />` : null}
@@ -534,23 +521,23 @@ function MonsterMap({ client, pub, v, clock, gps, sim }) {
     ${seeHunters ? html`<p class="sub ok">Tu vois les chasseurs pendant encore <${Countdown} to=${N.seeUntil} clock=${clock} short />.</p>` : null}
     ${refuge ? html`
       <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 100 m du point de rassemblement, plus personne ne peut t’attraper.</span></div>
-      ${mate ? html`<div class="row"><${Icon} n="users" s=${16} /><span class="small">${mate.name} est avec toi. Le premier de vous deux qui arrive vous sauve tous les deux.</span></div>` : null}` : null}
+` : null}
     <div class="btns" style="margin-top:8px">
-      <${Btn} icon="zap" onClick=${() => setSheet('power')}>Mon pouvoir</${Btn}>
+      <${Btn} icon="zap" kind=${N.power && N.power.used ? 'ghost' : 'primary'} onClick=${() => setSheet('power')}>${N.power && N.power.used ? 'Pouvoir utilisé' : 'Mon pouvoir'}</${Btn}>
       <${Btn} kind="dark" icon="life-buoy" confirm="Envoyer un SOS au MJ ?" onClick=${() => client.act('core', 'sos', gps.pos || {})} className="sos-btn">SOS</${Btn}>
     </div>
     <div class="slidebar"><${Slide} label="Glisse si un chasseur t’a attrapé" onDone=${() => setSheet('caught')} /></div>
-    ${sheet === 'caught' ? html`<${CaughtSheet} client=${client} v=${v} mate=${mate} close=${() => setSheet(null)} />` : null}
+    ${sheet === 'caught' ? html`<${CaughtSheet} client=${client} v=${v} close=${() => setSheet(null)} />` : null}
     ${sheet === 'power' ? html`<${PowerSheet} client=${client} v=${v} pub=${pub} close=${() => setSheet(null)} />` : null}
   </div>`;
 }
 
-function CaughtSheet({ client, v, mate, close }) {
+function CaughtSheet({ client, v, close }) {
   const [by, setBy] = useState(null);
   const H = v.nuit.hunters || [];
   return html`<${Sheet} onClose=${close}>
     <${Ex} size=${36} depth=${4} tag="h2">Qui t’a<br />attrapé ?</${Ex}>
-    <p class="small muted" style="margin:10px 0 14px">${mate ? `${mate.name} sera exorcisé avec toi : votre sort est lié.` : 'Tu deviendras chasseur à ton tour.'}</p>
+    <p class="small muted" style="margin:10px 0 14px">Tu deviendras chasseur à ton tour.</p>
     ${H.map((h) => html`<button key=${h.id} class="frow ${by === h.id ? 'on' : ''}" onClick=${() => setBy(h.id)}>
       <${Av} src=${h.id === 'mj' ? null : (client.names()[h.id] || {}).av} size=${34} />
       <span class="fname"><b>${h.name}</b><span>${h.role}</span></span>
@@ -640,7 +627,7 @@ function ClueRead({ N, k, clock, close, speed }) {
       ${text ? html`<p class="clue">${text}</p>` : html`<p class="muted">Ouverture…</p>`}
     </div>
     ${text ? html`<p class="ok" style="margin-top:14px;display:flex;gap:8px;align-items:center"><${Icon} n="timer" s=${16} />Ce message s’autodétruira dans ${fmtShort(left)}</p>` : null}
-    <p class="small muted" style="margin-top:8px">Il ne sera plus jamais lisible : mémorise-le, ou partage-le avec ton binôme.</p>
+    <p class="small muted" style="margin-top:8px">Il ne sera plus jamais lisible : mémorise-le bien.</p>
     <div class="bottom"><${Btn} kind="ghost" onClick=${close}>Retour</${Btn}></div>
   </div>`;
 }
@@ -649,7 +636,6 @@ function Exorcised({ pub, v, go }) {
   const x = v.nuit.exoBy || {};
   const names = Object.fromEntries((pub.players || []).map((p) => [p.id, p]));
   const by = x.by === 'mj' ? `${pub.mjName}, le chasseur` : names[x.by] ? `${names[x.by].name} ${names[x.by].last || ''}, ancien ${names[x.by].mon || 'monstre'}` : '…';
-  const mate = v.me.bound && names[v.me.bound];
   const mon = v.me.monster ? v.me.monster.name : 'Ton monstre';
   return html`<div class="screen">
     <div class="scene-bg" style="opacity:.6"><${Scene} name="brume" className="scene" style="width:100%;height:100%;filter:grayscale(1)" /></div>
@@ -657,7 +643,7 @@ function Exorcised({ pub, v, go }) {
     <div style="margin-bottom:14px"><${Av} src=${v.me.av} size=${70} className="exo-av" /></div>
     <p class="eyebrow">Capturé à ${hm(x.at || Date.now())} par ${by}</p>
     <${Ex} size=${56} depth=${7}>Exorcisé</${Ex}>
-    <p class="lead" style="margin-top:14px">${mon} a quitté ton corps${mate ? `, et ${mate.name} a été exorcisé avec toi. Vous redevenez humains : vous chassez désormais les monstres.` : '. Tu redeviens humain : tu chasses désormais les monstres.'}</p>
+    <p class="lead" style="margin-top:14px">${mon} a quitté ton corps. Tu redeviens humain : tu chasses désormais les monstres.</p>
     <div class="bottom"><${Btn} icon="crosshair" onClick=${go}>Rejoindre la chasse</${Btn}></div>
   </div>`;
 }
@@ -683,7 +669,7 @@ function Hunter({ client, pub, v, clock, gps, sim }) {
       sub=${N.st === 'refuge' ? 'avant le dernier départ' : 'avant la fin de l’alerte'} right=${plural(Object.keys(N.exo || {}).length, 'exorcisme')} />
     <div style="position:relative;height:52dvh">
       <div class="mapbox" style="position:absolute;inset:0">
-        <${GameMap} center=${N.center} radius=${N.radius} me=${gps.pos} marks=${marks} blind=${blind} onTap=${sim ? (p) => gps.moveTo(p) : null} />
+        <${GameMap} center=${N.center} radius=${N.radius} me=${gps.pos} marks=${marks} blind=${blind} mapStyle=${N.mapStyle} onTap=${sim ? (p) => gps.moveTo(p) : null} />
         <span class="pill maptag"><${Icon} n="radio" s=${14} />${last ? `Signalement il y a ${Math.max(0, Math.floor((now - last) / 60000))} min` : N.huntAt > now ? `Départ dans ${fmtShort(N.huntAt - now)}` : 'En attente du signalement'}</span>
       </div>
     </div>
@@ -701,13 +687,12 @@ function Portal({ pub, v }) {
   const N = v.nuit;
   const order = Object.values(N.saved || {}).sort((a, b) => a - b).indexOf(N.savedAt) + 1;
   const names = Object.fromEntries((pub.players || []).map((p) => [p.id, p]));
-  const mate = v.me.bound && names[v.me.bound];
   return html`<div class="screen">
     <div class="scene-bg"><${Scene} name="lac" className="scene" style="width:100%;height:100%" /></div>
     <div class="grow" style="min-height:44dvh"></div>
     <p class="eyebrow">Arrivée à ${hm(N.savedAt)}, ${ordinal(order || 1)} monstre sauvé</p>
     <${Ex} size=${50} depth=${7}>Tu as passé<br />le portail</${Ex}>
-    <p class="lead" style="margin-top:14px">Tes complices t’attendaient au point de rassemblement. Direction l’Hôtel Transylvanie${mate ? `, avec ${mate.name}` : ''}.</p>
+    <p class="lead" style="margin-top:14px">Tes complices t’attendaient au point de rassemblement. Direction l’Hôtel Transylvanie.</p>
     <div class="stats" style="margin-top:18px">
       <div class="stat"><b>${mins(N.savedAt - N.alertAt)}</b><span>min de cavale</span></div>
       <div class="stat"><b>${N.power && N.power.used ? 1 : 0}</b><span>pouvoir utilisé</span></div>

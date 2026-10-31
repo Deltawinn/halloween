@@ -6,21 +6,26 @@ import {
 import { GameMap } from './map.js';
 import { useGps } from './gps.js';
 import { unlockAudio } from './sound.js';
-import { SYMBOLS } from '../data.js';
+import { SYMBOLS, MAP_STYLES } from '../data.js';
 
 const STATUS = { monstre: 'Monstre', exorcise: 'Exorcisé', sauve: 'Sauvé' };
 
-export function MjApp({ client, extraTab }) {
+const ACT_TAB = { idle: 'prep', evasion: 'a1', alerte: 'a2', refuge: 'a3', fin: 'a3' };
+
+export function MjApp({ client }) {
   useSource(client);
   const v = client.mj;
   const pub = client.pub;
-  const [tab, setTab] = useState('nuit');
-  const clock = () => client.now();
+  const N = v && v.nuit;
+  const [tab, setTab] = useState(() => (N ? ACT_TAB[N.st] : 'prep'));
+  // en pause, les chronos se figent
+  const clock = () => (client.mj && client.mj.nuit && client.mj.nuit.pausedAt) || client.now();
   useEffect(() => {
     const wake = () => { unlockAudio(); keepAwake(); };
     document.addEventListener('pointerdown', wake, { once: true });
   }, []);
-  const N = v && v.nuit;
+  // on suit l'acte en cours
+  useEffect(() => { if (N) setTab(ACT_TAB[N.st] || 'prep'); }, [N && N.st]);
   const outside = N && (N.st === 'alerte' || N.st === 'refuge');
   const sim = !!client.local;
   const gps = useGps({ active: !!outside, simulated: sim, start: N && N.center, send: (p) => client.send({ g: 'nuit', a: 'gps', ...p }) });
@@ -31,24 +36,34 @@ export function MjApp({ client, extraTab }) {
   }
   const send = (g, a, x) => client.send({ g, a, ...(x || {}) });
   const sos = v.alerts.filter((a) => a.kind === 'sos' && clock() - a.t < 15 * 60000);
-  const tabs = [['terrain', 'Terrain'], ['enigmes', 'Énigmes'], ['nuit', 'Nuit'], ['chasse', 'Chasse']];
+  const tabs = [['prep', 'Préparation'], ['a1', 'Acte 1'], ['a2', 'Acte 2'], ['a3', 'Acte 3']];
   if (v.demo) tabs.push(['demo', 'Démo']);
+  const titles = { prep: 'Préparation', a1: 'L’Évasion', a2: 'L’Alerte', a3: 'Le Refuge', demo: 'Mode démo' };
+  const P = { v, pub, send, clock, gps, sim };
   let body;
-  if (tab === 'terrain') body = html`<${Terrain} v=${v} send=${send} gps=${gps} />`;
-  else if (tab === 'enigmes') body = html`<${Enigmes} v=${v} send=${send} />`;
-  else if (tab === 'chasse') body = html`<${Chasse} v=${v} pub=${pub} send=${send} clock=${clock} gps=${gps} sim=${sim} />`;
-  else if (tab === 'demo') body = html`<${Demo} v=${v} send=${send} />`;
-  else body = html`<${Nuit} v=${v} pub=${pub} send=${send} clock=${clock} />`;
+  if (tab === 'prep') body = html`<${Prep} ...${P} />`;
+  else if (tab === 'a1') body = html`<${Act1} ...${P} />`;
+  else if (tab === 'a2') body = html`<${Act2} ...${P} />`;
+  else if (tab === 'a3') body = html`<${Act3} ...${P} />`;
+  else body = html`<${Demo} v=${v} send=${send} />`;
   return html`<div class="screen">
       <p class="eyebrow">Maître du jeu${v.demo ? ' · démo' : ''}</p>
-      <${Ex} size=${40} depth=${5}>${{ terrain: 'Préparation', enigmes: 'Les énigmes', nuit: N.st === 'idle' ? 'La nuit' : 'Pilotage', chasse: 'La chasse', demo: 'Mode démo' }[tab]}</${Ex}>
-      <nav class="mjtabs" style="margin-top:14px">${tabs.map(([k, l]) => html`<button class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${l}</button>`)}</nav>
+      <${Ex} size=${40} depth=${5}>${titles[tab]}</${Ex}>
+      <nav class="mjtabs" style="margin-top:14px">${tabs.map(([k, l]) => html`<button class="${tab === k ? 'on' : ''} ${ACT_TAB[N.st] === k && k !== 'prep' ? 'live' : ''}" onClick=${() => setTab(k)}>${l}</button>`)}</nav>
       ${sos.map((a) => html`<div class="sos" key=${a.id}><b>${a.text}</b><div class="small">${hm(a.t)}${a.data && a.data.where && a.data.where.lat ? html` · <a class="ok" target="_blank" href=${`https://maps.google.com/?q=${a.data.where.lat},${a.data.where.lng}`}>voir sur un plan</a>` : ''}</div></div>`)}
       <${Safe}>${body}</${Safe}>
     </div>
     <${Toasts} alerts=${v.alerts.filter((a) => a.kind !== 'info')} storeKey=${'hw.mjtoast.' + (client.room || 'demo')} />
     <${Status} status=${client.status} hostAlive=${client.hostAlive()} />
     <div class="grain"></div>`;
+}
+
+function Section({ title, sub, open: start = false, children }) {
+  const [open, setOpen] = useState(start);
+  return html`<div class="section">
+    <button class="section-h" onClick=${() => setOpen(!open)}><span>${title}${sub ? html`<small>${sub}</small>` : null}</span><${Icon} n=${open ? 'minus' : 'plus'} s=${18} /></button>
+    ${open ? html`<div class="section-b">${children}</div>` : null}
+  </div>`;
 }
 
 // ===================== terrain =====================
@@ -72,11 +87,13 @@ function Terrain({ v, send, gps }) {
     </div>
     <div style="position:relative;height:42dvh">
       <div class="mapbox" style="position:absolute;inset:0">
-        <${GameMap} center=${N.center} radius=${C.radius} refuge=${N.refugePt} onTap=${tap} />
+        <${GameMap} center=${N.center} radius=${C.radius} refuge=${N.refugePt} onTap=${tap} mapStyle=${C.mapStyle} />
         <span class="pill maptag"><${Icon} n="map-pin" s=${14} />Touche la carte pour placer ${mode === 'center' ? 'la maison' : 'le refuge'}</span>
       </div>
     </div>
-    <div style="margin:8px 0 16px"><${Btn} kind="ghost" small icon="locate-fixed" onClick=${here}>Utiliser ma position ici</${Btn}></div>
+    <div style="margin:8px 0 10px"><${Btn} kind="ghost" small icon="locate-fixed" onClick=${here}>Utiliser ma position ici</${Btn}></div>
+    <p class="label">Style de la carte, pour tout le monde</p>
+    <div class="seg" style="margin-bottom:16px;flex-wrap:wrap">${Object.entries(MAP_STYLES).map(([k, l]) => html`<button class=${(C.mapStyle || 'nuit') === k ? 'on' : ''} onClick=${() => cfg('mapStyle', k)}>${l}</button>`)}</div>
     <div class="orow"><${Icon} n="house" /><span class="olbl">Point de départ<small>La maison, centre du périmètre</small></span>${N.center ? html`<span class="ok"><${Icon} n="check" /></span>` : html`<span class="tag grey">à placer</span>`}</div>
     <div class="orow"><${Icon} n="map" /><span class="olbl">Périmètre<small>Rayon autour de la maison</small></span>
       <${Stepper} value=${C.radius} step=${100} min=${200} max=${3000} onChange=${(x) => cfg('radius', x)} show=${(x) => (x >= 1000 ? (x / 1000).toString().replace('.', ',') + ' km' : x + ' m')} /></div>
@@ -167,114 +184,222 @@ function PrintCards({ E, close }) {
     <div class="print">${E.enigmas.map((e) => html`<div class="pcard"><b>${e.num}</b><span>Tape ce numéro dans l’appli</span></div>`)}</div>`;
 }
 
-// ===================== nuit : avant et pendant =====================
+// ===================== préparation =====================
 
-function Nuit({ v, pub, send, clock }) {
-  const N = v.nuit;
-  if (N.st === 'idle') return html`<${Lobby} v=${v} pub=${pub} send=${send} />`;
-  if (N.st === 'fin') return html`<${Fin} v=${v} pub=${pub} send=${send} />`;
-  return html`<${Pilot} v=${v} pub=${pub} send=${send} clock=${clock} />`;
-}
-
-function Lobby({ v, send }) {
+function Prep({ v, send, gps }) {
   const N = v.nuit;
   const ps = v.players;
-  const [sel, setSel] = useState(null);
   const [mjEdit, setMjEdit] = useState(false);
   const [first, setFirst] = useState(v.mj.first);
   const [last, setLast] = useState(v.mj.last);
-  const pairs = ps.filter((p) => p.bound).length / 2;
-  const unbound = ps.filter((p) => !p.bound);
   const ready = ps.filter((p) => p.monster && p.av).length;
+  const idle = N.st === 'idle';
   const warn = [];
-  if (!N.center) warn.push('Place la maison dans l’onglet Terrain.');
-  if (!N.refugePt) warn.push('Place le refuge dans l’onglet Terrain.');
-  if (unbound.length) warn.push(`${plural(unbound.length, 'joueur')} sans binôme.`);
-  if (N.escape.code === '3618') warn.push('Le code du cadenas est celui d’exemple : mets le tien dans Énigmes.');
-  if (N.clues[0].startsWith('Indice 1 :')) warn.push('Écris les indices du refuge dans Énigmes.');
-  const tapP = (id) => {
-    if (!sel) return setSel(id);
-    if (sel === id) return setSel(null);
-    send('core', 'pair', { a: sel, b: id });
-    setSel(null);
-  };
+  if (!N.center) warn.push('Place la maison dans Terrain.');
+  if (!N.refugePt) warn.push('Place le refuge dans Terrain.');
+  if (N.clues[0].startsWith('Indice 1 :')) warn.push('Écris les indices du refuge dans Énigmes et indices.');
   return html`
     <div class="stats" style="margin-bottom:12px">
       <div class="stat"><b>${ps.length}</b><span>joueurs</span></div>
       <div class="stat"><b>${ready}</b><span>fiches prêtes</span></div>
-      <div class="stat"><b>${pairs}</b><span>binômes scellés</span></div>
+      <div class="stat"><b>${N.escape.code}</b><span>code du cadenas</span></div>
     </div>
-    <div class="stack">
+    ${idle ? html`<div class="stack">
       <${Btn} kind="ghost" icon="tv" onClick=${() => send('core', 'screen', { screen: v.screen === 'intro' ? 'lobby' : 'intro' })}>${v.screen === 'intro' ? 'Revenir à l’accueil sur la TV' : 'Lancer l’intro sur la TV'}</${Btn}>
       <${Btn} icon="play" confirm="Lancer la nuit maintenant ?" onClick=${() => send('nuit', 'start')}>Lancer la partie</${Btn}>
     </div>
-    ${warn.length ? html`<div class="alert" style="margin-top:10px">${warn.map((w) => html`<div>${w}</div>`)}</div>` : null}
-    <div class="topbar" style="margin:20px 0 8px"><span>Les joueurs ${sel ? '· touche son binôme' : ''}</span>
-      ${unbound.length > 1 ? html`<button class="link" style="width:auto;padding:0" onClick=${() => send('core', 'autopair')}>Former les binômes restants</button>` : null}</div>
-    ${ps.map((p) => {
-      const mate = ps.find((x) => x.id === p.bound);
-      return html`<div class="frow ${sel === p.id ? 'on' : ''}" key=${p.id} onClick=${() => tapP(p.id)}>
+    ${warn.length ? html`<div class="alert" style="margin-top:10px">${warn.map((w) => html`<div>${w}</div>`)}</div>` : null}`
+    : html`<p class="small muted">La partie est lancée : pilote-la depuis l’onglet de l’acte en cours.</p>`}
+
+    <${Section} title="Les joueurs" sub=${`${ps.length} inscrits`} open=${idle}>
+      ${ps.map((p) => html`<div class="frow" key=${p.id}>
         <${Av} src=${p.av} size=${34} />
-        <span class="fname"><b>${p.name} ${p.last || ''}</b><span>${p.monster ? p.monster.name : 'Fiche en cours'}${mate ? ` · avec ${mate.name}` : ''}</span></span>
+        <span class="fname"><b>${p.name} ${p.last || ''}</b><span>${p.monster ? p.monster.name : 'Fiche en cours'}</span></span>
         <span class="dot ${p.on ? 'on' : ''}"></span>
-        ${p.bound ? html`<button class="tag grey" onClick=${(e) => { e.stopPropagation(); send('core', 'unbind', { pid: p.id }); }}>délier</button>` : null}
-        <span onClick=${(e) => e.stopPropagation()}><${Btn} kind="ghost" small confirm="Retirer ?" onClick=${() => send('core', 'kick', { pid: p.id })}><${Icon} n="x" s=${14} /></${Btn}></span>
-      </div>`;
-    })}
-    ${!ps.length ? html`<p class="small muted">Personne pour l’instant. Les joueurs scannent le QR code affiché sur la TV.</p>` : null}
-    <div class="orow" style="margin-top:18px" onClick=${() => setMjEdit(!mjEdit)}><${Icon} n="crosshair" /><span class="olbl">${v.mj.first} ${v.mj.last}<small>Le chasseur, c’est toi</small></span><${Icon} n="chevrons-right" /></div>
+        <${Btn} kind="ghost" small confirm="Retirer ?" onClick=${() => send('core', 'kick', { pid: p.id })}><${Icon} n="x" s=${14} /></${Btn}>
+      </div>`)}
+      ${!ps.length ? html`<p class="small muted">Personne pour l’instant. Les joueurs scannent le QR code affiché sur la TV.</p>` : null}
+    </${Section}>
+
+    <${Section} title="Terrain et durées" sub=${N.center && N.refugePt ? 'Maison et refuge placés' : 'À placer'}>
+      <${Terrain} v=${v} send=${send} gps=${gps} />
+    </${Section}>
+
+    <${Section} title="Énigmes et indices" sub="Escape game et refuge">
+      <${Enigmes} v=${v} send=${send} />
+    </${Section}>
+
+    <div class="orow" style="margin-top:12px" onClick=${() => setMjEdit(!mjEdit)}><${Icon} n="crosshair" /><span class="olbl">${v.mj.first} ${v.mj.last}<small>Le chasseur, c’est toi</small></span><${Icon} n="chevrons-right" /></div>
     ${mjEdit ? html`<div class="two" style="margin-top:8px"><input class="inp" value=${first} onInput=${(e) => setFirst(e.target.value)} /><input class="inp" value=${last} onInput=${(e) => setLast(e.target.value)} /></div>
       <div style="margin-top:8px"><${Btn} small onClick=${() => { send('core', 'mjName', { first, last }); setMjEdit(false); }}>Enregistrer</${Btn}></div>` : null}`;
 }
 
-function Pilot({ v, pub, send, clock }) {
-  const N = v.nuit;
-  const acts = [['evasion', 'Acte 1', 'Évasion'], ['alerte', 'Acte 2', 'Alerte'], ['refuge', 'Acte 3', 'Refuge']];
-  const idx = acts.findIndex((a) => a[0] === N.st);
-  const found = Object.keys(N.found).length;
-  const solved = Object.keys(N.solved).length;
-  const hints = Object.values(N.hints).filter((h) => !h.free).length;
-  const next = { evasion: ['Passer à l’alerte générale', 'Ouvrir le cadenas pour tout le monde ?'], alerte: ['Passer au refuge', 'Finir l’alerte maintenant ?'], refuge: ['Terminer la nuit', 'Faire partir le dernier portail ?'] }[N.st];
-  const names = Object.fromEntries(v.players.map((p) => [p.id, p]));
-  const [who, setWho] = useState(null);
-  return html`
-    <div class="phase">${acts.map(([k, a, l], i) => html`<div class=${i < idx ? 'done' : i === idx ? 'cur' : ''}>${a}<b>${l}</b></div>`)}</div>
-    <div class="big tnum" style="margin:16px 0 4px;font-size:96px"><${Countdown} to=${N.endsAt} clock=${clock} /></div>
-    ${N.paused ? html`<p class="ok">En pause</p>` : null}
-    ${N.st === 'evasion' ? html`
-      <div class="stats" style="margin:12px 0"><div class="stat"><b>${found}</b><span>énigmes trouvées</span></div><div class="stat"><b>${solved}</b><span>résolues</span></div><div class="stat"><b>${hints}</b><span>coup${hints > 1 ? 's' : ''} de pouce</span></div></div>`
-    : html`
-      <div class="stats" style="margin:12px 0"><div class="stat"><b>${N.count.monstres}</b><span>monstres libres</span></div><div class="stat"><b>${N.count.exorcises}</b><span>exorcisés</span></div><div class="stat"><b>${N.count.sauves}</b><span>sauvés</span></div></div>
-      <p class="small muted">${N.huntAt > clock() ? html`Tu peux sortir dans <${Countdown} to=${N.huntAt} clock=${clock} short />.` : html`Prochain signalement dans <${Countdown} to=${N.nextSight} clock=${clock} short />.`}</p>`}
-    <div class="btns" style="margin-top:10px">
-      <${Btn} kind="dark" onClick=${() => send('nuit', 'addTime', { min: 5 })}>+5 min</${Btn}>
-      <${Btn} kind="dark" onClick=${() => send('nuit', 'addTime', { min: -5 })}>−5 min</${Btn}>
-      <${Btn} kind="dark" icon=${N.paused ? 'play' : 'pause'} onClick=${() => send('nuit', N.paused ? 'resume' : 'pause')}>${N.paused ? 'Reprendre' : 'Pause'}</${Btn}>
-    </div>
-    <div class="stack" style="margin-top:6px">
-      ${N.st === 'evasion' ? html`<${Btn} kind="dark" icon="sparkles" onClick=${() => send('nuit', 'hint')}>Donner un coup de pouce sur la TV</${Btn}>` : null}
-      <${Btn} kind="dark" confirm=${next[1]} onClick=${() => send('nuit', 'next')}>${next[0]}</${Btn}>
-    </div>
-    ${N.st !== 'evasion' ? html`<p class="label" style="margin-top:18px">Les monstres</p>
-      ${v.players.map((p) => {
-        const st = N.status[p.id];
-        const out = N.out[p.id];
-        return html`<div class="frow ${who === p.id ? 'on' : ''}" key=${p.id} onClick=${() => setWho(who === p.id ? null : p.id)}>
-          <${Av} src=${p.av} size=${30} />
-          <span class="fname"><b>${p.name} ${p.last || ''}</b><span>${p.monster ? p.monster.name : ''} · ${STATUS[st] || '?'}${out ? ' · hors zone' : ''}${N.powers[p.id] && N.powers[p.id].used ? ' · pouvoir utilisé' : ''}</span></span>
-          <span class="dot ${p.on ? 'on' : ''}"></span>
-        </div>
-        ${who === p.id ? html`<div class="btns" style="margin:4px 0 8px">
-          ${st === 'monstre' ? html`<${Btn} small kind="red" confirm="Exorciser ?" onClick=${() => send('nuit', 'exorcise', { pid: p.id, by: 'mj' })}>Exorciser</${Btn}>` : null}
-          ${st === 'monstre' && N.st === 'refuge' ? html`<${Btn} small kind="ghost" confirm="Sauver ?" onClick=${() => send('nuit', 'save', { pid: p.id })}>Le sauver</${Btn}>` : null}
-          ${st !== 'monstre' ? html`<${Btn} small kind="ghost" confirm="Le ramener ?" onClick=${() => send('nuit', 'revive', { pid: p.id })}>Redevenir monstre</${Btn}>` : null}
-        </div>` : null}`;
-      })}` : null}
-    <p class="label" style="margin-top:18px">Journal</p>
+// ===================== briques des actes =====================
+
+function Clock({ N, clock, label }) {
+  return html`<div class="big tnum" style="margin:6px 0 2px;font-size:92px"><${Countdown} to=${N.endsAt} clock=${clock} /></div>
+    <p class="small muted" style="margin:0 0 12px">${N.paused ? html`<span class="ok">En pause</span>` : label}</p>`;
+}
+
+function TimeBtns({ N, send }) {
+  return html`<div class="btns">
+    <${Btn} kind="dark" onClick=${() => send('nuit', 'addTime', { min: 5 })}>+5 min</${Btn}>
+    <${Btn} kind="dark" onClick=${() => send('nuit', 'addTime', { min: -5 })}>−5 min</${Btn}>
+    <${Btn} kind="dark" icon=${N.paused ? 'play' : 'pause'} onClick=${() => send('nuit', N.paused ? 'resume' : 'pause')}>${N.paused ? 'Reprendre' : 'Pause'}</${Btn}>
+  </div>`;
+}
+
+function Say({ N, send }) {
+  const [text, setText] = useState('');
+  return html`<div class="card" style="margin-top:12px">
+    <p class="label" style="display:flex;gap:8px;align-items:center"><${Icon} n="tv" s=${16} />Écrire un indice sur la TV</p>
+    <textarea class="inp" rows="2" value=${text} maxlength="240" placeholder="Ex. : Une carte se cache près de ce qui réchauffe la cuisine." onInput=${(e) => setText(e.target.value)}></textarea>
+    <div style="margin-top:8px"><${Btn} icon="sparkles" disabled=${!text.trim()} onClick=${() => { send('nuit', 'say', { text }); setText(''); }}>Afficher sur la TV</${Btn}></div>
+    <p class="sub">Il s’affiche en grand sur la TV, reste visible dans un coin, et arrive aussi sur les téléphones.${N.say ? ` Dernier : « ${N.say.text} »` : ''}</p>
+  </div>`;
+}
+
+function Journal({ N }) {
+  return html`<p class="label" style="margin-top:20px">Journal</p>
     <ul class="feed">${N.feed.slice().reverse().map((f) => html`<li key=${f.id}><span>${hm(f.t)}</span>${f.text}</li>`)}</ul>`;
 }
 
-function Fin({ v, pub, send }) {
+function NotYet({ text }) {
+  return html`<p class="lead muted" style="margin-top:8px">${text}</p>`;
+}
+
+// ===================== acte 1 : l'évasion =====================
+
+function Act1({ v, send, clock }) {
+  const N = v.nuit;
+  if (N.st === 'idle') return html`<${NotYet} text="L’évasion commence quand tu lances la partie, depuis l’onglet Préparation. Tu pourras ici suivre les énigmes, mettre en pause et écrire des indices sur la TV." />`;
+  if (N.st !== 'evasion') {
+    const took = Math.round((N.escapedAt - N.startAt) / 60000);
+    return html`<p class="lead">${N.timedOut ? `Temps écoulé : le code ${N.escape.code} a été révélé.` : `Évadés en ${took} min.`} Avance donnée : ${N.head} min.</p>`;
+  }
+  const names = Object.fromEntries(v.players.map((p) => [p.id, p]));
+  const hints = Object.values(N.hints).filter((h) => !h.free).length;
+  const solved = Object.keys(N.solved).length;
+  return html`
+    <${Clock} N=${N} clock=${clock} label="avant que le cadenas ne s’ouvre de lui-même" />
+    <${TimeBtns} N=${N} send=${send} />
+    <div class="stats" style="margin:12px 0"><div class="stat"><b>${Object.keys(N.found).length}</b><span>trouvées</span></div><div class="stat"><b>${solved}</b><span>résolues</span></div><div class="stat"><b>${hints}</b><span>coup${hints > 1 ? 's' : ''} de pouce</span></div><div class="stat"><b>${N.tries}</b><span>essais du code</span></div></div>
+    <p class="label">Les énigmes</p>
+    ${N.escape.enigmas.map((e) => {
+      const f = N.found[e.num];
+      const s = N.solved[e.num];
+      return html`<div class="erow" key=${e.num} style="cursor:default">
+        <span class="n">${e.num}</span>
+        <span class="t">${e.room} · réponse ${e.answers[0]}<small>${s ? `Résolue par ${names[s.pid] ? names[s.pid].name : '?'}` : f ? `Trouvée par ${names[f.pid] ? names[f.pid].name : '?'}, pas encore résolue` : 'Pas encore trouvée'}${N.hints[e.num] ? ' · coup de pouce donné' : ''}</small></span>
+        <span class="d"><${Icon} n=${SYM_ICON[e.sym]} s=${16} />${N.escape.code[N.escape.order.indexOf(e.sym)]}</span>
+      </div>`;
+    })}
+    <${Say} N=${N} send=${send} />
+    <div class="stack" style="margin-top:8px">
+      <${Btn} kind="dark" icon="sparkles" onClick=${() => send('nuit', 'hint')}>Révéler le coup de pouce d’une énigme trouvée</${Btn}>
+      <${Btn} kind="dark" confirm="Ouvrir le cadenas pour tout le monde ?" onClick=${() => send('nuit', 'next')}>Ouvrir le cadenas et lancer l’alerte</${Btn}>
+    </div>
+    <${Journal} N=${N} />`;
+}
+
+// ===================== acte 2 : l'alerte =====================
+
+function HuntMap({ v, clock, gps, sim, arbitre, refuge }) {
+  const N = v.nuit;
+  useNow(5000);
+  const names = Object.fromEntries(v.players.map((p) => [p.id, p]));
+  const now = clock();
+  const monsters = arbitre
+    ? Object.entries(N.pos).filter(([id]) => N.status[id] === 'monstre').map(([id, p]) => ({ id, lat: p.lat, lng: p.lng, av: names[id] && names[id].av, kind: 'monstre', label: `${names[id] ? names[id].name : '?'}${N.out[id] ? ', hors zone' : ''}`, dim: now - p.t > 60000 }))
+    : (N.sights || []).map((s) => {
+      const m = Math.floor((now - s.t) / 60000);
+      return { id: s.id, lat: s.lat, lng: s.lng, av: names[s.pid] && names[s.pid].av, kind: 'monstre', label: `${names[s.pid] ? names[s.pid].name : '?'}${s.kind === 'horszone' ? ', hors zone' : m >= 1 ? `, il y a ${m} min` : ''}` };
+    });
+  const hunters = Object.entries(N.hpos || {}).filter(([id]) => id !== 'mj').map(([id, p]) => ({ id, lat: p.lat, lng: p.lng, av: names[id] && names[id].av, kind: 'chasseur', label: names[id] && names[id].name }));
+  return html`<div style="position:relative;height:48dvh">
+    <div class="mapbox" style="position:absolute;inset:0">
+      <${GameMap} center=${N.center} radius=${N.cfg.radius} refuge=${arbitre || refuge ? N.refugePt : null} me=${gps.pos} marks=${[...monsters, ...hunters]}
+        blind=${!arbitre && N.blindUntil > now} mapStyle=${N.cfg.mapStyle} onTap=${sim ? (p) => gps.moveTo(p) : null} />
+      <span class="pill maptag"><${Icon} n="radio" s=${14} />${N.huntAt > now ? `Tu sors dans ${fmtShort(N.huntAt - now)}` : `Signalement dans ${fmtShort(N.nextSight - now)}`}</span>
+    </div>
+  </div>
+  ${gps.err ? html`<div class="alert" style="margin-top:8px">${gps.err}</div>` : null}`;
+}
+
+function Monsters({ v, send, refuge }) {
+  const N = v.nuit;
+  const [who, setWho] = useState(null);
+  return html`<p class="label" style="margin-top:18px">Les monstres</p>
+    ${v.players.map((p) => {
+      const st = N.status[p.id];
+      return html`<div class="frow ${who === p.id ? 'on' : ''}" key=${p.id} onClick=${() => setWho(who === p.id ? null : p.id)}>
+        <${Av} src=${p.av} size=${30} />
+        <span class="fname"><b>${p.name} ${p.last || ''}</b><span>${p.monster ? p.monster.name : ''} · ${STATUS[st] || '?'}${N.out[p.id] ? ' · hors zone' : ''}${N.powers[p.id] && N.powers[p.id].used ? ' · pouvoir utilisé' : ''}</span></span>
+        <span class="dot ${p.on ? 'on' : ''}"></span>
+      </div>
+      ${who === p.id ? html`<div class="btns" style="margin:4px 0 8px">
+        ${st === 'monstre' ? html`<${Btn} small kind="red" confirm="Exorciser ?" onClick=${() => send('nuit', 'exorcise', { pid: p.id, by: 'mj' })}>Exorciser</${Btn}>` : null}
+        ${st === 'monstre' && refuge ? html`<${Btn} small kind="ghost" confirm="Sauver ?" onClick=${() => send('nuit', 'save', { pid: p.id })}>Le sauver</${Btn}>` : null}
+        ${st !== 'monstre' ? html`<${Btn} small kind="ghost" confirm="Le ramener ?" onClick=${() => send('nuit', 'revive', { pid: p.id })}>Redevenir monstre</${Btn}>` : null}
+      </div>` : null}`;
+    })}`;
+}
+
+function Exos({ v }) {
+  const N = v.nuit;
+  const names = Object.fromEntries(v.players.map((p) => [p.id, p]));
+  return html`<p class="label" style="margin-top:18px">Exorcismes</p>
+    ${(N.mine || []).length ? N.mine.slice().sort((a, b) => b.at - a.at).map((x) => html`<div class="frow" key=${x.id} style="cursor:default">
+      <${Av} src=${names[x.id] && names[x.id].av} size=${30} />
+      <span class="fname"><b>${names[x.id] ? `${names[x.id].name} ${names[x.id].last || ''}` : '?'}</b><span>par ${x.by === 'mj' ? 'toi' : names[x.by] ? names[x.by].name : '?'}</span></span>
+      <span class="ok" style="font-family:Gloock;font-size:18px">en ${mins(x.after)} min</span>
+    </div>`) : html`<p class="small muted">Aucun pour l’instant. Le monstre attrapé le déclare lui-même en glissant le bouton rouge de son téléphone.</p>`}`;
+}
+
+function Act2({ v, send, clock, gps, sim }) {
+  const N = v.nuit;
+  const [arbitre, setArbitre] = useState(false);
+  if (N.st === 'idle' || N.st === 'evasion') return html`<${NotYet} text="L’alerte générale commence quand le cadenas s’ouvre. Tu verras ici la carte de la chasse, les monstres et les exorcismes." />`;
+  if (N.st !== 'alerte') return html`<p class="lead">L’alerte est terminée. ${plural(N.count.exorcises, 'monstre exorcisé', 'monstres exorcisés')}.</p><${Exos} v=${v} />`;
+  return html`
+    <${Clock} N=${N} clock=${clock} label="avant la fin de l’alerte" />
+    <${TimeBtns} N=${N} send=${send} />
+    <div class="stats" style="margin:12px 0"><div class="stat"><b>${N.count.monstres}</b><span>monstres libres</span></div><div class="stat"><b>${N.count.exorcises}</b><span>exorcisés</span></div></div>
+    <${HuntMap} v=${v} clock=${clock} gps=${gps} sim=${sim} arbitre=${arbitre} />
+    <div class="seg" style="margin-top:8px">
+      <button class=${!arbitre ? 'on' : ''} onClick=${() => setArbitre(false)}>Vue chasseur</button>
+      <button class=${arbitre ? 'on' : ''} onClick=${() => setArbitre(true)}>Vue arbitre</button>
+    </div>
+    <p class="sub">${arbitre ? 'Positions réelles de tous les monstres, en direct. Ne la montre à personne.' : 'Ce que voient tous les chasseurs : le dernier signalement.'}${sim ? ' Démo : touche la carte pour te déplacer.' : ''}</p>
+    <${Exos} v=${v} />
+    <${Monsters} v=${v} send=${send} />
+    <${Say} N=${N} send=${send} />
+    <div class="stack" style="margin-top:8px"><${Btn} kind="dark" confirm="Finir l’alerte maintenant ?" onClick=${() => send('nuit', 'next')}>Finir l’alerte et passer au refuge</${Btn}></div>
+    <${Journal} N=${N} />`;
+}
+
+// ===================== acte 3 : le refuge =====================
+
+function Act3({ v, pub, send, clock, gps, sim }) {
+  const N = v.nuit;
+  useNow(1000);
+  if (N.st === 'fin') return html`<${Fin} v=${v} send=${send} />`;
+  if (N.st !== 'refuge') return html`<${NotYet} text="Le refuge commence à la fin de l’alerte générale. Tu verras ici les indices qui se débloquent, qui est arrivé, et tu pourras terminer la nuit." />`;
+  const now = clock();
+  return html`
+    <${Clock} N=${N} clock=${clock} label="avant le dernier départ" />
+    <${TimeBtns} N=${N} send=${send} />
+    <div class="stats" style="margin:12px 0"><div class="stat"><b>${N.count.monstres}</b><span>encore dehors</span></div><div class="stat"><b>${N.count.sauves}</b><span>sauvés</span></div><div class="stat"><b>${N.count.exorcises}</b><span>exorcisés</span></div></div>
+    <p class="label">Les indices</p>
+    ${(N.tiles || []).map((t) => html`<div class="erow" key=${t.k} style="cursor:default;opacity:${t.open ? 1 : 0.55}">
+      <span class="n">${t.k + 1}</span><span class="t">${N.clues[t.k]}<small>${t.open ? 'Débloqué' : `Se débloque dans ${fmtShort(t.at - now)}`}</small></span></div>`)}
+    <div style="margin-top:14px"><${HuntMap} v=${v} clock=${clock} gps=${gps} sim=${sim} arbitre=${true} refuge /></div>
+    <${Monsters} v=${v} send=${send} refuge />
+    <div class="stack" style="margin-top:12px"><${Btn} kind="dark" confirm="Faire partir le dernier portail ?" onClick=${() => send('nuit', 'next')}>Terminer la nuit</${Btn}></div>
+    <${Journal} N=${N} />`;
+}
+
+function Fin({ v, send }) {
   const R = v.nuit.results || { saved: [], exo: [], lost: [], hunters: {} };
   return html`
     <div class="stats" style="margin-bottom:14px">
@@ -282,53 +407,10 @@ function Fin({ v, pub, send }) {
       <div class="stat"><b>${R.exo.length}</b><span>exorcisés</span></div>
       <div class="stat"><b>${R.hunters.mj || 0}</b><span>captures pour toi</span></div>
     </div>
-    <p class="lead">La nuit est terminée. Kebab time.</p>
+    <p class="lead">${R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>
     <div class="stack" style="margin-top:16px">
       <${Btn} kind="ghost" confirm="Effacer les scores et revenir à l’accueil ?" onClick=${() => send('nuit', 'reset')}>Préparer une nouvelle partie</${Btn}>
     </div>`;
-}
-
-// ===================== chasse =====================
-
-function Chasse({ v, pub, send, clock, gps, sim }) {
-  const N = v.nuit;
-  const [view, setView] = useState('chasseur');
-  useNow(5000);
-  const names = Object.fromEntries(v.players.map((p) => [p.id, p]));
-  const now = clock();
-  if (N.st === 'idle' || N.st === 'evasion') {
-    return html`<p class="lead muted">La chasse commence quand les monstres sortent de la maison. Ta position sera envoyée aux autres chasseurs, et tu verras ici chaque signalement.</p>
-      ${N.st === 'evasion' ? html`<p class="small" style="margin-top:12px">Évasion en cours : fin dans <${Countdown} to=${N.endsAt} clock=${clock} short />.</p>` : null}`;
-  }
-  const monsterMarks = view === 'arbitre'
-    ? Object.entries(N.pos).filter(([id]) => N.status[id] === 'monstre').map(([id, p]) => ({ id, lat: p.lat, lng: p.lng, av: names[id] && names[id].av, kind: 'monstre', label: `${names[id] ? names[id].name : '?'}${N.out[id] ? ', hors zone' : ''}`, dim: now - p.t > 60000 }))
-    : (N.sights || []).map((s) => {
-      const m = Math.floor((now - s.t) / 60000);
-      return { id: s.id, lat: s.lat, lng: s.lng, av: names[s.pid] && names[s.pid].av, kind: 'monstre', label: `${names[s.pid] ? names[s.pid].name : '?'}${s.kind === 'horszone' ? ', hors zone' : m >= 1 ? `, il y a ${m} min` : ''}` };
-    });
-  const hunterMarks = Object.entries(N.hpos || {}).filter(([id]) => id !== 'mj').map(([id, p]) => ({ id, lat: p.lat, lng: p.lng, av: names[id] && names[id].av, kind: 'chasseur', label: names[id] && names[id].name }));
-  const blind = view === 'chasseur' && N.blindUntil > now;
-  return html`
-    <div class="head" style="margin-bottom:10px"><span class="small muted">${N.st === 'refuge' ? 'Avant le dernier départ' : 'Avant la fin de l’alerte'}</span>
-      <div class="timer"><span class="t" style="font-size:44px"><${Countdown} to=${N.endsAt} clock=${clock} /></span></div></div>
-    <div style="position:relative;height:50dvh">
-      <div class="mapbox" style="position:absolute;inset:0">
-        <${GameMap} center=${N.center} radius=${N.cfg.radius} refuge=${view === 'arbitre' ? N.refugePt : null} me=${gps.pos} marks=${[...monsterMarks, ...hunterMarks]} blind=${blind} onTap=${sim ? (p) => gps.moveTo(p) : null} />
-        <span class="pill maptag"><${Icon} n="radio" s=${14} />${N.huntAt > now ? `Tu sors dans ${fmtShort(N.huntAt - now)}` : `Signalement dans ${fmtShort(N.nextSight - now)}`}</span>
-      </div>
-    </div>
-    <div class="seg" style="margin-top:8px">
-      <button class=${view === 'chasseur' ? 'on' : ''} onClick=${() => setView('chasseur')}>Vue chasseur</button>
-      <button class=${view === 'arbitre' ? 'on' : ''} onClick=${() => setView('arbitre')}>Vue arbitre</button>
-    </div>
-    <p class="sub">${view === 'arbitre' ? 'Positions réelles de tous les monstres, en direct. Ne la montre à personne.' : 'Ce que voient tous les chasseurs : le dernier signalement.'}${sim ? ' Démo : touche la carte pour te déplacer.' : ''}</p>
-    ${gps.err ? html`<div class="alert" style="margin-top:8px">${gps.err}</div>` : null}
-    <p class="label" style="margin-top:16px">Exorcismes</p>
-    ${(N.mine || []).length ? N.mine.slice().sort((a, b) => b.at - a.at).map((x) => html`<div class="frow" key=${x.id}>
-      <${Av} src=${names[x.id] && names[x.id].av} size=${30} />
-      <span class="fname"><b>${names[x.id] ? `${names[x.id].name} ${names[x.id].last || ''}` : '?'}</b><span>par ${x.by === 'mj' ? 'toi' : names[x.by] ? names[x.by].name : '?'}</span></span>
-      <span class="ok" style="font-family:Gloock;font-size:18px">en ${mins(x.after)} min</span>
-    </div>`) : html`<p class="small muted">Aucun pour l’instant. Le monstre attrapé le déclare lui-même en glissant le bouton rouge de son téléphone.</p>`}`;
 }
 
 // ===================== démo =====================

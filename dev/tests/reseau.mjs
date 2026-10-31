@@ -29,7 +29,8 @@ watch(mj, 'mj');
 await mj.goto(host.mj);
 await mj.locator('.mjtabs').waitFor({ timeout: 20000 });
 const mtab = (t) => mj.locator('.mjtabs button', { hasText: t }).click();
-await mtab('Terrain');
+await mtab('Préparation');
+await mj.locator('.section-h', { hasText: 'Terrain' }).click();
 await mj.getByRole('button', { name: 'Utiliser ma position ici' }).click();
 await wait(800);
 await mj.locator('.seg button', { hasText: 'Placer le refuge' }).click();
@@ -57,23 +58,13 @@ for (const [first, last, mon] of names) {
   await p.getByRole('button', { name: 'Valider ma fiche' }).click({ timeout: 15000 });
   P.push({ p, first, ctx });
 }
-// binômes : Alpha+Bravo, Charlie+Delta
-const pair = async (a, b2) => {
-  await a.p.locator('.frow', { hasText: b2.first }).click({ timeout: 15000 });
-  await a.p.getByRole('button', { name: 'Sceller notre sort' }).click();
-  await wait(1500);
-  await b2.p.locator('.frow', { hasText: a.first }).click({ timeout: 15000 });
-  await b2.p.getByRole('button', { name: 'Sceller notre sort' }).click();
-};
-await pair(P[0], P[1]);
-await pair(P[2], P[3]);
 await wait(3000);
 await P[0].p.getByText('La nuit va').waitFor({ timeout: 15000 });
 await P[0].p.screenshot({ path: shots + 'n-p-attente.png' });
 await tv.screenshot({ path: shots + 'n-tv-accueil2.png' });
 
 // lancement
-await mtab('Nuit');
+await mtab('Préparation');
 await mj.getByRole('button', { name: 'Lancer la partie' }).click();
 await mj.getByRole('button', { name: 'Lancer la nuit maintenant ?' }).click();
 try { await P[0].p.getByText('L’Évasion').waitFor({ timeout: 15000 }); } catch (e) {
@@ -82,7 +73,7 @@ try { await P[0].p.getByText('L’Évasion').waitFor({ timeout: 15000 }); } catc
   console.log(errs.join('\n')); throw e;
 }
 // énigmes
-const enig = [['237', 'quinze'], ['666', 'michael myers'], ['1408', 'ombre'], ['13', 'poltergeist']];
+const enig = [['13', 'deux'], ['237', '6'], ['666', 'trois'], ['1408', '9']];
 for (let i = 0; i < 4; i++) {
   const p = P[i].p;
   for (const k of enig[i][0]) await p.locator('.keys button', { hasText: k }).first().click();
@@ -99,19 +90,15 @@ await p0.getByRole('button', { name: 'Retour' }).first().click();
 await p0.locator('.tab', { hasText: 'cadenas' }).click();
 await p0.getByRole('heading', { name: /ultime/ }).waitFor({ timeout: 15000 });
 await p0.screenshot({ path: shots + 'n-p-ultime.png' });
-await p0.locator('.codein').fill('3618');
+await p0.locator('.codein').fill('2639');
 await p0.getByRole('button', { name: 'Tenter le code' }).click();
 await p0.getByRole('heading', { name: 'Fuyez' }).waitFor({ timeout: 15000 });
 for (const x of P) await x.p.getByRole('button', { name: 'Voir la carte' }).click({ timeout: 15000 });
 // le chasseur sort tout de suite
-await mtab('Nuit');
-for (let i = 0; i < 6; i++) await mj.getByRole('button', { name: '−5 min' }).click();
-await wait(200);
-// avance : on recule le départ de la chasse en retirant du temps n'aide pas ; on attend le signalement
-await mtab('Chasse');
+await mtab('Acte 2');
 await wait(4000);
 await mj.screenshot({ path: shots + 'n-mj-chasse.png' });
-// capture : Charlie attrapé par le MJ, Delta tombe aussi
+// capture : Charlie attrapé par le MJ, Delta reste libre (chacun pour soi)
 const pc = P[2].p;
 const k = await pc.locator('.knob').boundingBox();
 await pc.mouse.move(k.x + 20, k.y + 20);
@@ -121,7 +108,8 @@ await pc.mouse.up();
 await pc.locator('.sheet .frow').first().click();
 await pc.getByRole('button', { name: 'Confirmer l’exorcisme' }).click();
 await pc.getByRole('heading', { name: 'Exorcisé' }).waitFor({ timeout: 15000 });
-await P[3].p.getByRole('heading', { name: 'Exorcisé' }).waitFor({ timeout: 15000 });
+await P[3].p.waitForTimeout(1500);
+if (await P[3].p.getByRole('heading', { name: 'Exorcisé' }).count()) throw new Error('Delta ne devait pas être exorcisé');
 await pc.screenshot({ path: shots + 'n-p-exorcise.png' });
 await wait(1500);
 await tv.screenshot({ path: shots + 'n-tv-exorcisme.png' });

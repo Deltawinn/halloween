@@ -6,7 +6,7 @@ import { play, unlockAudio, setSound, soundOn } from './sound.js';
 export function TvApp({ host }) {
   useSource(host);
   const pub = host.pubView;
-  const clock = () => host.E.now();
+  const clock = () => host.E.S.nuit.pausedAt || host.E.now();
   const [scale, setScale] = useState(1);
   const wrap = useRef(null);
   useEffect(() => {
@@ -140,6 +140,7 @@ function Evasion({ pub, clock }) {
       })}</div>
       ${N.ultimate ? html`<p class="tvlead" style="flex:1;font-family:Gloock;font-size:34px;line-height:1.3">${N.ultimate}</p>` : null}
     </div>
+    ${N.say ? html`<div class="tvsay"><span>Le maître du jeu murmure</span><p>${N.say.text}</p></div>` : null}
   </div>`;
 }
 
@@ -160,7 +161,7 @@ function Alerte({ pub, clock }) {
   });
   return html`
     <div style="position:absolute;left:60px;top:60px;width:1100px;height:960px"><div class="mapbox" style="position:absolute;inset:0">
-      <${GameMap} center=${N.center} radius=${N.radius} marks=${marks} blind=${N.blindUntil > now} />
+      <${GameMap} center=${N.center} radius=${N.radius} marks=${marks} blind=${N.blindUntil > now} mapStyle=${N.mapStyle} />
     </div></div>
     <div style="position:absolute;left:1220px;top:60px;right:60px;bottom:60px;z-index:5">
       <p class="tvlabel">Acte 2</p>
@@ -213,6 +214,12 @@ function Fin({ pub }) {
 }
 
 function Overlay({ ov, pub }) {
+  if (ov.kind === 'say') {
+    return html`<div class="ov k-say" key=${ov.id}>
+      <p class="tvlabel" style="color:var(--orange2);font-size:30px">Le maître du jeu murmure</p>
+      <${Ex} size=${ov.title.length > 90 ? 76 : 104} depth=${8}>${ov.title}</${Ex}>
+    </div>`;
+  }
   const p = ov.pid && pub.players.find((x) => x.id === ov.pid);
   return html`<div class="ov k-${ov.kind}" key=${ov.id}>
     ${p ? html`<div style="margin-bottom:30px"><${Av} src=${p.av} size=${120} /></div>` : null}

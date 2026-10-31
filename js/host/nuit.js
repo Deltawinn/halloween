@@ -1,6 +1,6 @@
 // « Le dernier portail » : la partie en trois actes.
 // Acte 1 L'Évasion (escape game), Acte 2 L'Alerte générale (traque GPS), Acte 3 Le Refuge.
-import { DEFAULT_ESCAPE, DEFAULT_CLUES, DEFAULT_CFG, MONSTERS, POWERS, CUSTOM_POWERS } from '../data.js';
+import { DEFAULT_ESCAPE, DEFAULT_CLUES, DEFAULT_CFG, MONSTERS, POWERS, CUSTOM_POWERS, MAP_STYLES } from '../data.js';
 import { haversine, jitter, pick, MIN } from './util.js';
 
 const SEC = 1000;
@@ -29,6 +29,7 @@ export const nuit = {
     fx: { decoy: {}, fake: {}, hide: {}, swap: {}, hide5: {}, blindUntil: 0, seeUntil: {}, immune: {}, early: {} },
     reads: {},
     feed: [],
+    say: null,
     results: null,
   }),
 
@@ -42,6 +43,7 @@ export const nuit = {
       N.cfg.every = k(m.every, 1, 20, N.cfg.every);
       N.cfg.radius = k(m.radius, 200, 5000, N.cfg.radius);
       N.cfg.refugeR = k(m.refugeR, 15, 200, N.cfg.refugeR);
+      if (MAP_STYLES[m.mapStyle]) N.cfg.mapStyle = m.mapStyle;
       // indices : répartis sur la durée du refuge (20, 16, 12, 8, 4 pour 20 min)
       const r = N.cfg.refuge;
       N.cfg.clueAt = [0, 1, 2, 3, 4].map((i) => Math.max(1, Math.round(r - (r * i) / 5)));
@@ -91,7 +93,7 @@ export const nuit = {
         st: 'evasion', startAt: now, endsAt: now + N.cfg.evasion * MIN, pausedAt: 0,
         found: {}, solved: {}, hints: {}, tries: 0, escapedAt: 0, timedOut: false, head: 0,
         powers: {}, status: {}, exo: {}, saved: {}, pos: {}, hpos: {}, sights: [], out: {}, lastOut: {},
-        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0,
+        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null,
       });
       for (const p of E.list()) {
         const known = p.monster && MONSTERS.find((x) => x.name === p.monster.name);
@@ -144,6 +146,16 @@ export const nuit = {
       E.overlay({ kind: 'clue', title: `Coup de pouce, énigme ${e.num}`, sub: e.hint, ms: 10000 });
     },
 
+    say(E, c, m) {
+      const N = E.S.nuit;
+      const text = String(m.text || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+      if (!text) return;
+      N.say = { id: ++E.S.seq, t: E.now(), text };
+      feed(E, `Message du maître du jeu : ${text}`);
+      E.overlay({ kind: 'say', title: text, ms: 15000 });
+      E.alertMany(E.ids(), `Le maître du jeu : ${text}`, 'info');
+    },
+
     gps(E, c, m) {
       if (isFinite(+m.lat) && isFinite(+m.lng)) E.S.nuit.hpos.mj = { lat: +m.lat, lng: +m.lng, acc: Math.round(+m.acc || 0), t: E.now() };
     },
@@ -157,7 +169,7 @@ export const nuit = {
       const N = E.S.nuit;
       if (!N.status[m.pid] || N.st === 'fin') return;
       for (const id of pairOf(E, m.pid)) { N.status[id] = 'monstre'; delete N.exo[id]; delete N.saved[id]; }
-      feed(E, `Le maître du jeu ramène ${pairNames(E, m.pid)} dans le camp des monstres.`);
+      feed(E, `Le maître du jeu ramène ${E.name(m.pid)} dans le camp des monstres.`);
     },
 
     save(E, c, m) {
@@ -194,7 +206,11 @@ export const nuit = {
       const e = N.escape.enigmas.find((x) => x.num === String(m.num));
       if (!e || !N.found[e.num] || N.solved[e.num]) return;
       const a = norm(m.text);
-      const ok = a && e.answers.some((x) => norm(x) === a || (norm(x).length > 4 && a.includes(norm(x))));
+      const words = a.split(' ');
+      const ok = a && e.answers.some((x) => {
+        const n = norm(x);
+        return n === a || words.includes(n) || (n.length > 4 && a.includes(n));
+      });
       if (!ok) { E.alert(pid, 'Mauvaise réponse.', 'bad'); return; }
       N.solved[e.num] = { pid, at: E.now() };
       const n = Object.keys(N.solved).length;
@@ -289,25 +305,27 @@ export const nuit = {
       const pw = N.powers[pid];
       if (!pw || pw.used || N.status[pid] !== 'monstre' || !['alerte', 'refuge'].includes(N.st)) return;
       const now = E.now();
+      const sp = E.speed || 1; // en démo accélérée, les effets durent de vraies secondes
       const id = pw.id;
       if (id === 'immune') return;
       if (id === 'revive') {
         const t = m.target;
         if (N.status[t] !== 'exorcise') return;
-        for (const x of pairOf(E, t)) { N.status[x] = 'monstre'; delete N.exo[x]; }
-        feed(E, `Électrochoc ! ${pairNames(E, t)} redeviennent des monstres.`);
-        E.alertMany(pairOf(E, t), `${E.name(pid)} t’a ramené parmi les monstres. Fuis !`, 'ok');
-        E.overlay({ kind: 'curse', title: 'Électrochoc', sub: `${pairNames(E, t)} redeviennent des monstres.`, ms: 7000 });
+        N.status[t] = 'monstre';
+        delete N.exo[t];
+        feed(E, `Électrochoc ! ${E.name(t)} redevient un monstre.`);
+        E.alert(t, `${E.name(pid)} t’a ramené parmi les monstres. Fuis !`, 'ok', { page: 'revive' });
+        E.overlay({ kind: 'curse', title: 'Électrochoc', sub: `${E.name(t)} redevient un monstre.`, ms: 7000 });
       } else if (id === 'decoy' || id === 'fake' || id === 'hide' || id === 'swap') {
         N.fx[id][pid] = true;
       } else if (id === 'hide5') {
-        N.fx.hide5[pid] = now + 5 * MIN;
+        N.fx.hide5[pid] = now + 5 * MIN * sp;
       } else if (id === 'blind') {
-        N.fx.blindUntil = now + MIN;
+        N.fx.blindUntil = now + MIN * sp;
         E.alertMany(hunters(E).filter((h) => h !== 'mj'), 'Votre carte vient de devenir noire…', 'bad');
         E.mjAlert(`${E.full(pid)} a brouillé la carte des chasseurs pendant 1 min.`, 'warn');
       } else if (id === 'see') {
-        N.fx.seeUntil[pid] = now + 30 * SEC;
+        N.fx.seeUntil[pid] = now + 30 * SEC * sp;
       } else if (id === 'delay') {
         N.nextSight += 2 * MIN;
       } else if (id === 'clue') {
@@ -315,7 +333,7 @@ export const nuit = {
       }
       pw.used = true;
       pw.at = now;
-      E.alert(pid, `${POWERS[id].name} : pouvoir lancé.`, 'ok');
+      E.alert(pid, `${POWERS[id].name} : ${DONE[id] || 'pouvoir lancé.'}`, 'ok');
       E.mjAlert(`${E.full(pid)} utilise ${POWERS[id].name}.`, 'info');
     },
 
@@ -372,7 +390,6 @@ export const nuit = {
     const v = base(E);
     const me = E.S.players[pid];
     v.status = N.status[pid] || null;
-    v.partner = me && me.bound;
     if (N.st !== 'idle' && N.powers[pid]) {
       const pw = N.powers[pid];
       v.power = { id: pw.id, ...POWERS[pw.id], used: pw.used };
@@ -388,8 +405,6 @@ export const nuit = {
       if (N.status[pid] === 'monstre' || N.status[pid] === 'sauve') {
         if ((N.fx.seeUntil[pid] || 0) > E.now()) { v.seeUntil = N.fx.seeUntil[pid]; v.hpos = N.hpos; }
         if (N.st === 'refuge') v.tiles = tiles(E, pid);
-        const mate = me && me.bound;
-        if (mate && N.pos[mate] && N.status[mate] === 'monstre') v.matePos = N.pos[mate];
         v.exorcisable = E.ids().filter((id) => N.status[id] === 'exorcise');
       }
       if (N.status[pid] === 'exorcise') {
@@ -421,11 +436,24 @@ export const nuit = {
 
 // ---------------------------------------------------------------------------
 
+const DONE = {
+  decoy: 'au prochain signalement, deux faux toi apparaîtront sur la carte des chasseurs.',
+  fake: 'au prochain signalement, les chasseurs recevront une fausse position.',
+  hide: 'tu seras absent du prochain signalement.',
+  hide5: 'ta position est cachée aux chasseurs pendant 5 minutes.',
+  blind: 'la carte des chasseurs est noire pendant 1 minute.',
+  swap: 'au prochain signalement, ta position sera échangée avec celle d’un autre monstre.',
+  see: 'tu vois les chasseurs sur ta carte pendant 30 secondes.',
+  delay: 'le prochain signalement est retardé de 2 minutes.',
+  revive: 'le monstre choisi est de retour.',
+  clue: 'au refuge, tu pourras lire le prochain indice avant tout le monde.',
+};
+
 function base(E) {
   const N = E.S.nuit;
   return {
     st: N.st, endsAt: N.endsAt, startAt: N.startAt, huntAt: N.huntAt, nextSight: N.nextSight, refugeAt: N.refugeAt,
-    alertAt: N.alertAt, paused: !!N.pausedAt, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
+    alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
     head: N.head, escapedAt: N.escapedAt, timedOut: N.timedOut,
     count: { monstres: countSt(E, 'monstre'), exorcises: countSt(E, 'exorcise'), sauves: countSt(E, 'sauve') },
   };
@@ -526,10 +554,11 @@ function finish(E) {
     lost,
     hunters: countBy(Object.values(N.exo).map((x) => x.by)),
   };
-  feed(E, 'Le dernier départ pour l’Hôtel Transylvanie a eu lieu.');
+  N.results.allCaught = !N.results.saved.length && !lost.length;
+  feed(E, N.results.allCaught ? 'Tous les monstres ont été exorcisés : les chasseurs gagnent.' : 'Le dernier départ pour l’Hôtel Transylvanie a eu lieu.');
   E.overlay({
     kind: 'reveal',
-    title: 'Fin de la nuit',
+    title: N.results.allCaught ? 'Victoire des chasseurs' : 'Fin de la nuit',
     sub: `${N.results.saved.length} monstre${N.results.saved.length > 1 ? 's' : ''} sauvé${N.results.saved.length > 1 ? 's' : ''}, ${N.results.exo.length} exorcisé${N.results.exo.length > 1 ? 's' : ''}.`,
     ms: 10000,
   });
@@ -542,11 +571,9 @@ function countBy(arr) {
   return o;
 }
 
+// chacun pour soi : on ne capture ou ne sauve qu'une personne à la fois
 function pairOf(E, pid) {
-  const p = E.S.players[pid];
-  const out = [pid];
-  if (p && p.bound && E.S.players[p.bound] && !E.S.players[p.bound].gone) out.push(p.bound);
-  return out;
+  return [pid];
 }
 
 function pairNames(E, pid) {

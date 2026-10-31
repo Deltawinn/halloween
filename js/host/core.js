@@ -23,7 +23,7 @@ export const core = {
 
     avatar(E, { pid }, m) {
       const d = String(m.data || '');
-      if (d.startsWith('data:image/png') && d.length < 12000) E.S.players[pid].avatar = d;
+      if ((d.startsWith('data:image/png') || d.startsWith('data:image/jpeg')) && d.length < 20000) E.S.players[pid].avatar = d;
     },
 
     monster(E, { pid }, m) {

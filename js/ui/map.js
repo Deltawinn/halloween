@@ -1,49 +1,55 @@
 // Carte de la traque (Leaflet + fond sombre CARTO teinté orange). Zoom aux boutons et au pincement.
 import * as L from '../../vendor/leaflet.esm.js';
-import { html, useEffect, useRef } from './kit.js';
+import { html, useEffect, useRef, useState } from './kit.js';
 import { ICONS } from './icons.js';
 
-// Fonds de carte sans clé : Esri « gris foncé » (teinté orange en CSS), OpenStreetMap en secours
-const ESRI = [
-  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 16, className: 'tiles-esri', attribution: '© Esri, © OpenStreetMap' } },
-  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 16, className: 'tiles-esri-labels' } },
-];
-const OSM = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opt: { maxZoom: 19, className: 'tiles-osm', attribution: '© OpenStreetMap' } };
-let useOsm = false;
-try { useOsm = sessionStorage.getItem('hw.tiles') === 'osm'; } catch {}
+// Fonds de carte sans clé, au choix du MJ. Si un fond ne répond pas, on bascule sur OpenStreetMap.
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+const T = (path, cls, extra = {}) => ({ url: ESRI + path + '/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, className: cls, ...extra } });
+const STYLES = {
+  nuit: [T('Canvas/World_Dark_Gray_Base', 'tiles-esri', { maxNativeZoom: 16, attribution: '© Esri, © OpenStreetMap' }), T('Canvas/World_Dark_Gray_Reference', 'tiles-esri-labels', { maxNativeZoom: 16 })],
+  gris: [T('Canvas/World_Dark_Gray_Base', 'tiles-plain', { maxNativeZoom: 16, attribution: '© Esri, © OpenStreetMap' }), T('Canvas/World_Dark_Gray_Reference', 'tiles-plain', { maxNativeZoom: 16 })],
+  satellite: [T('World_Imagery', 'tiles-sat', { maxNativeZoom: 18, attribution: '© Esri, Maxar' }), T('Reference/World_Transportation', 'tiles-sat-roads', { maxNativeZoom: 18 })],
+  plan: [{ url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opt: { maxZoom: 19, className: 'tiles-osm', attribution: '© OpenStreetMap' } }],
+};
+let broken = {};
+try { broken = JSON.parse(sessionStorage.getItem('hw.tiles.ko') || '{}'); } catch {}
 
-function addBase(m) {
-  if (useOsm) { L.tileLayer(OSM.url, OSM.opt).addTo(m); return; }
-  const layers = ESRI.map((t) => L.tileLayer(t.url, t.opt).addTo(m));
-  let ok = 0;
-  let bad = 0;
-  layers[0].on('tileload', () => { ok += 1; });
-  layers[0].on('tileerror', () => {
-    bad += 1;
-    if (bad >= 4 && ok === 0 && !useOsm) {
-      useOsm = true;
-      try { sessionStorage.setItem('hw.tiles', 'osm'); } catch {}
-      layers.forEach((l) => m.removeLayer(l));
-      L.tileLayer(OSM.url, OSM.opt).addTo(m);
-    }
-  });
+function addBase(m, style, onSwap) {
+  const key = broken[style] ? 'plan' : STYLES[style] ? style : 'nuit';
+  const layers = STYLES[key].map((t) => L.tileLayer(t.url, t.opt).addTo(m));
+  if (key !== 'plan') {
+    let ok = 0;
+    let bad = 0;
+    layers[0].on('tileload', () => { ok += 1; });
+    layers[0].on('tileerror', () => {
+      bad += 1;
+      if (bad >= 4 && ok === 0 && !broken[key]) {
+        broken[key] = true;
+        try { sessionStorage.setItem('hw.tiles.ko', JSON.stringify(broken)); } catch {}
+        onSwap();
+      }
+    });
+  }
+  return layers;
 }
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ico = (n, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
 
-export function GameMap({ center, radius, refuge, me, mate, marks, onTap, className = '', blind, home = true, fitKey }) {
+export function GameMap({ center, radius, refuge, me, mate, marks, onTap, className = '', blind, home = true, fitKey, mapStyle = 'nuit' }) {
   const el = useRef(null);
   const map = useRef(null);
   const layer = useRef(null);
   const fitted = useRef(null);
   const refit = useRef(null);
+  const base = useRef([]);
+  const [swap, setSwap] = useState(0);
   const tapRef = useRef(onTap);
   tapRef.current = onTap;
 
   useEffect(() => {
     const m = L.map(el.current, { zoomControl: false, attributionControl: true, center: [46.6, 2.4], zoom: 5, tap: true });
-    addBase(m);
     L.control.zoom({ position: 'topright', zoomInTitle: 'Zoomer', zoomOutTitle: 'Dézoomer' }).addTo(m);
     m.attributionControl.setPrefix(false);
     layer.current = L.layerGroup().addTo(m);
@@ -59,6 +65,15 @@ export function GameMap({ center, radius, refuge, me, mate, marks, onTap, classN
     ro.observe(el.current);
     return () => { ro.disconnect(); m.remove(); };
   }, []);
+
+  // fond de carte : change quand le MJ choisit un autre style
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    base.current.forEach((l) => m.removeLayer(l));
+    base.current = addBase(m, mapStyle, () => setSwap((x) => x + 1));
+    base.current.forEach((l) => l.bringToBack());
+  }, [mapStyle, swap]);
 
   useEffect(() => {
     const m = map.current;

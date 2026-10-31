@@ -11,7 +11,7 @@ export const POWERS = {
   swap: { name: 'Transfert d\'âme', desc: 'Au prochain signalement, ta position est échangée avec celle d\'un autre monstre.' },
   see: { name: 'On flotte tous', desc: 'Tu vois la position des chasseurs pendant 30 secondes.' },
   delay: { name: 'Prière noire', desc: 'Le prochain signalement de tous les monstres est retardé de 2 minutes.' },
-  revive: { name: 'Électrochoc', desc: 'Tu ramènes un binôme exorcisé dans le camp des monstres.' },
+  revive: { name: 'Électrochoc', desc: 'Tu ramènes un monstre exorcisé dans le camp des monstres.' },
   clue: { name: 'Boule de cristal', desc: 'Au refuge, tu lis le prochain indice avant tout le monde.' },
 };
 
@@ -45,34 +45,36 @@ export const CUSTOM_POWERS = ['hide', 'decoy', 'fake', 'see', 'hide5', 'blind'];
 // Symboles des chiffres du cadenas (ordre donné par l'ultime énigme)
 export const SYMBOLS = { skull: 'Le crâne', moon: 'La lune', eye: 'L\'œil', flame: 'La flamme' };
 
+// L'évasion : chaque énigme a pour réponse un chiffre du cadenas.
+// L'ultime énigme donne l'ordre des symboles : crâne, lune, œil, flamme → 2 6 3 9.
 export const DEFAULT_ESCAPE = {
-  code: '3618',
+  code: '2639',
   order: ['skull', 'moon', 'eye', 'flame'],
   ultimate: 'Le crâne ouvre la marche. La lune se lève avant que l\'œil ne s\'ouvre. La flamme, elle, s\'éteint toujours en dernier.',
   enigmas: [
     {
-      num: '237', room: 'Salon', sym: 'skull',
-      q: 'Au bout du couloir de l\'Overlook, deux sœurs attendent Danny. Multiplie le numéro de la chambre interdite par le nombre de sœurs, puis additionne les chiffres du résultat.',
-      answers: ['15', 'quinze'],
-      hint: 'La chambre interdite porte le numéro de cette carte.',
+      num: '13', room: 'Salon', sym: 'skull',
+      q: 'Devant le miroir, il faut prononcer son nom cinq fois pour qu\'il vienne avec son crochet. Pour faire sortir l\'autre de sa maquette, trois fois suffisent. Combien de fois de plus faut-il appeler le premier que le second ?',
+      answers: ['2', 'deux'],
+      hint: 'Le premier, c\'est Candyman. Le second, Beetlejuice.',
     },
     {
-      num: '666', room: 'Buanderie', sym: 'flame',
-      q: 'Chaque lettre de ce message a été décalée d\'un cran dans l\'alphabet. Décode le nom de celui qui rôde : NJDIBFM NZFST',
-      answers: ['michael myers', 'myers', 'michael'],
-      hint: 'Le N devient M, le J devient I…',
+      num: '237', room: 'Salon', sym: 'moon',
+      q: 'Additionne les chiffres de la chambre interdite de l\'hôtel Overlook, puis divise par le nombre de sœurs qui attendent Danny au bout du couloir.',
+      answers: ['6', 'six'],
+      hint: 'La chambre interdite porte le numéro de cette carte. Les sœurs, ce sont les jumelles de Shining.',
     },
     {
-      num: '1408', room: 'Cuisine', sym: 'eye',
-      q: 'Plus il y a de lumière, plus je suis nette. Dans le noir complet, je disparais. Je te suis partout sans jamais faire de bruit. Qui suis-je ?',
-      answers: ['ombre', 'ton ombre', 'mon ombre', 'l\'ombre', 'une ombre'],
-      hint: 'Regarde à tes pieds, près d\'une lampe.',
+      num: '666', room: 'Cuisine', sym: 'eye',
+      q: 'Prends le jour du mois où Jason frappe à Crystal Lake. Retire le dernier nombre de la comptine que chantent les fillettes quand Freddy approche. Que reste-t-il ?',
+      answers: ['3', 'trois'],
+      hint: 'Vendredi 13. La comptine commence par « Un, deux, Freddy te coupe en deux » et s\'arrête à dix.',
     },
     {
-      num: '13', room: 'Entrée', sym: 'moon',
-      q: 'Une petite fille, assise devant une télévision qui grésille, se retourne et annonce : « Ils sont là. » De quel film parle-t-on ?',
-      answers: ['poltergeist'],
-      hint: 'Un film de 1982 produit par Steven Spielberg.',
+      num: '1408', room: 'Cuisine', sym: 'flame',
+      q: 'Combien de jours te reste-t-il à vivre après avoir regardé la cassette maudite ? Ajoute le nombre de tueurs cachés sous le masque de Ghostface dans le premier Scream.',
+      answers: ['9', 'neuf'],
+      hint: 'The Ring : sept jours. Scream : Billy et Stu.',
     },
   ],
 };
@@ -89,7 +91,15 @@ export const DEFAULT_CLUES = [
 
 export const DEFAULT_CFG = {
   evasion: 30, alerte: 30, refuge: 20, every: 5, radius: 1000,
-  refugeR: 40, safeR: 100, clueAt: [20, 16, 12, 8, 4], readSecs: 15,
+  refugeR: 40, safeR: 100, clueAt: [20, 16, 12, 8, 4], readSecs: 15, mapStyle: 'nuit',
+};
+
+// Styles de carte proposés au MJ (fonds sans clé)
+export const MAP_STYLES = {
+  nuit: 'Nuit orange',
+  satellite: 'Satellite de nuit',
+  plan: 'Plan détaillé',
+  gris: 'Gris foncé',
 };
 
 // Loup-garou : rôles classiques

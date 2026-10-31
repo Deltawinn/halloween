@@ -33,18 +33,21 @@ assert.ok(E.playerView('p0').nuit.power.name);
 // évasion
 act('p0', 'num', { n: '999' });
 act('p0', 'num', { n: '237' });
-act('p1', 'answer', { num: '237', text: 'Quinze' });
-act('p2', 'num', { n: '666' }); act('p2', 'answer', { num: '666', text: 'Michael Myers' });
-act('p3', 'num', { n: '1408' }); act('p3', 'hint', { num: '1408' }); act('p3', 'answer', { num: '1408', text: "l'ombre" });
-act('p4', 'num', { n: '13' }); act('p4', 'answer', { num: '13', text: 'Poltergeist' });
+act('p1', 'answer', { num: '237', text: '5' });
+assert.ok(!E.S.nuit.solved['237'], 'mauvaise réponse refusée');
+act('p1', 'answer', { num: '237', text: 'Six' });
+act('p2', 'num', { n: '666' }); act('p2', 'answer', { num: '666', text: 'il en reste 3' });
+act('p3', 'num', { n: '1408' }); act('p3', 'hint', { num: '1408' }); act('p3', 'answer', { num: '1408', text: 'neuf' });
+act('p4', 'num', { n: '13' }); act('p4', 'answer', { num: '13', text: '2' });
 const pv = E.playerView('p5').nuit;
 assert.equal(pv.solved, 4);
 assert.ok(pv.ultimate);
-assert.deepEqual(pv.enigmas.map((e) => e.digit).sort().join(''), '1368');
+assert.deepEqual(pv.enigmas.map((e) => e.digit).sort().join(''), '2369');
+for (const e of pv.enigmas) assert.equal(e.digit, { 13: '2', 237: '6', 666: '3', 1408: '9' }[e.num], 'la réponse est le chiffre');
 T += 10 * MIN;
 act('p5', 'code', { code: '1111' });
 assert.equal(E.S.nuit.tries, 1);
-act('p5', 'code', { code: '3618' });
+act('p5', 'code', { code: '2639' });
 assert.equal(E.S.nuit.st, 'alerte');
 assert.equal(E.S.nuit.head, 5, 'avance : max 6 min, moins 1 indice');
 // traque
@@ -59,17 +62,28 @@ assert.ok(E.S.nuit.out.p6);
 assert.ok(E.playerView('p6').nuit.out);
 T += 10500; act('p6', 'gps', { lat: C.lat + 0.02, lng: C.lng, acc: 10 });
 assert.equal(E.S.nuit.sights.filter((s) => s.kind === 'horszone').length, 2);
-// capture par le MJ : le binôme tombe aussi
+// capture par le MJ : chacun pour soi
 act('p0', 'caught', { by: 'mj' });
 assert.equal(E.S.nuit.status.p0, 'exorcise');
-assert.equal(E.S.nuit.status.p1, 'exorcise');
+assert.equal(E.S.nuit.status.p1, 'monstre', 'le binôme n’est plus exorcisé');
+act('p1', 'caught', { by: 'p0' });
 assert.ok(E.playerView('p0').nuit.sights.length > 0, 'un exorcisé voit les signalements');
 // Jason (p4) se relève une fois
 act('p4', 'caught', { by: 'p0' });
 assert.equal(E.S.nuit.status.p4, 'monstre');
 act('p4', 'caught', { by: 'p0' });
 assert.equal(E.S.nuit.status.p4, 'exorcise');
-assert.equal(E.S.nuit.status.p5, 'exorcise');
+act('p5', 'caught', { by: 'p4' });
+// pause : le temps est figé puis rendu
+const end = E.S.nuit.endsAt;
+E.handle({ mj: true }, { g: 'nuit', a: 'pause' });
+assert.equal(E.publicView({}).nuit.pausedAt, T);
+T += 2 * MIN;
+E.handle({ mj: true }, { g: 'nuit', a: 'resume' });
+assert.equal(E.S.nuit.endsAt, end + 2 * MIN);
+// message du MJ
+E.handle({ mj: true }, { g: 'nuit', a: 'say', text: 'Regardez sous le canapé' });
+assert.equal(E.publicView({}).nuit.say.text, 'Regardez sous le canapé');
 // Frankenstein (p7… index 17) n'est pas là ; pouvoirs simples
 act('p2', 'power', {});
 assert.ok(E.S.nuit.powers.p2.used);
@@ -92,9 +106,8 @@ assert.equal(E.S.nuit.status.p6, 'monstre');
 // arrivée
 act('p6', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
 assert.equal(E.S.nuit.status.p6, 'sauve');
-assert.equal(E.S.nuit.status.p7, 'sauve');
-act('p2', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
-act('p8', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
+assert.equal(E.S.nuit.status.p7, 'monstre', 'chacun se sauve seul');
+for (const id of ['p2', 'p3', 'p7', 'p8', 'p9']) act(id, 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
 assert.equal(E.S.nuit.st, 'fin', 'fin quand plus aucun monstre libre');
 const res = E.S.nuit.results;
 assert.equal(res.saved.length, 6);

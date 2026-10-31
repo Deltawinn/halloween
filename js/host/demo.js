@@ -77,20 +77,7 @@ export class Bots {
     if ((N.st === 'alerte' || N.st === 'refuge') && this.cfg.gps && N.center) this.outside(bots, dt, now);
   }
 
-  // les monstres virtuels acceptent qui les choisit, puis se mettent ensemble
-  lobby(bots) {
-    const E = this.E;
-    for (const p of E.list()) {
-      if (p.bot || p.bound || !p.want) continue;
-      const t = E.S.players[p.want];
-      if (t && t.bot && !t.bound) E.handle({ pid: t.id }, { a: 'choose', pid: p.id });
-    }
-    const free = bots.filter((b) => !b.bound && !E.list().some((p) => !p.bot && p.want === b.id));
-    for (let i = 0; i + 1 < free.length; i += 2) {
-      E.handle({ pid: free[i].id }, { a: 'choose', pid: free[i + 1].id });
-      E.handle({ pid: free[i + 1].id }, { a: 'choose', pid: free[i].id });
-    }
-  }
+  lobby() {}
 
   evasion(bots, dt, now) {
     const E = this.E;
@@ -146,11 +133,6 @@ export class Bots {
       if (hunter) {
         N.hpos[b.id] = { lat: m.pos.lat, lng: m.pos.lng, acc: 8, t: now };
         if (!hunting) continue;
-        // un chasseur virtuel attrape le monstre qu'il touche
-        for (const id of E.ids()) {
-          if (N.status[id] !== 'monstre' || !N.pos[id] || !E.S.players[id].bot) continue;
-          if (haversine(N.pos[id], m.pos) < 20) this.act(id, 'caught', { by: b.id });
-        }
         continue;
       }
       this.act(b.id, 'gps', { lat: m.pos.lat, lng: m.pos.lng, acc: 8 });
