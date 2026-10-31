@@ -1,6 +1,6 @@
 // Service worker minimal : rend l'appli installable et garde une copie de secours.
 // Toujours le réseau d'abord, pour que chaque mise à jour du site arrive tout de suite.
-const CACHE = 'portail-v1';
+const CACHE = 'portail-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {
