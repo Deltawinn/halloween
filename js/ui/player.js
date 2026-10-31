@@ -1,7 +1,7 @@
 // Téléphone d'un joueur : inscription, puis les trois actes de la nuit.
 import {
   html, useState, useEffect, useRef, useMemo, useSource, useNow, Countdown, Icon, Ex, Av, Btn, Pill, Steps, Scene,
-  Sheet, Slide, Toasts, Status, keepAwake, Safe, fmt, fmtShort, hm, mins, plural, ordinal, ORD, SYM_ICON,
+  Sheet, Slide, Toasts, Status, keepAwake, Safe, Title, fmt, fmtShort, hm, mins, plural, ordinal, ORD, SYM_ICON,
 } from './kit.js';
 import { GameMap } from './map.js';
 import { useGps } from './gps.js';
@@ -79,8 +79,8 @@ function Welcome({ pub, onGo }) {
     <div class="scene-bg" style="transform:translateY(-14%)"><${Scene} name="brume" className="scene" style="width:100%;height:100%" /></div>
     <div class="fade" style="background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,transparent 22%,transparent 50%,#000 78%)"></div>
     <div class="pills" style="justify-content:center;margin-top:6px"><${Pill} or icon="moon-star">Halloween, 31 octobre</${Pill}></div>
-    <div class="grow" style="min-height:40dvh"></div>
-    <${Ex} size=${66} depth=${10}>Le dernier<br />portail</${Ex}>
+    <div class="grow" style="min-height:24dvh"></div>
+    <${Title} />
     <p class="lead" style="margin-top:22px">Entre. Ne pose aucune question.<br />Tout te sera révélé à la tombée de la nuit.</p>
     ${!isStandalone() && isPhone() ? html`<${InstallHelp} />` : null}
     <div class="bottom">
@@ -211,7 +211,7 @@ function Monster({ client, pub, me, done }) {
             <b>${m.name}</b><span>${taken[m.name] ? `Déjà pris par ${taken[m.name]}` : m.film}</span>
           </button>`)}
         </div>`}
-    <div class="bottom">
+    <div class="bottom sticky">
       <${Btn} disabled=${custom != null ? !custom.trim() : !sel} onClick=${go}>Continuer</${Btn}>
       <button class="link" onClick=${() => setCustom(custom == null ? '' : null)}>${custom == null ? 'Autre monstre : tape son nom' : 'Revenir à la liste'}</button>
     </div>
@@ -263,7 +263,7 @@ function Binome({ client, pub, me, back }) {
         ${!off ? html`<span class="chk ${sel === p.id ? 'on' : ''}">${sel === p.id ? html`<${Icon} n="check" s=${14} />` : null}</span>` : null}
       </button>`;
     })}
-    <div class="bottom">
+    <div class="bottom sticky">
       ${selP && wantsMe.has(selP.id) ? html`<div class="row on"><${Icon} n="link" s=${16} /><span class="small">${selP.name} t’a choisi aussi.</span></div>` : null}
       ${me.want && me.want === sel && !wantsMe.has(sel) ? html`<div class="row"><${Icon} n="hourglass" s=${16} /><span class="small">En attente de la réponse de ${selP ? selP.name : '…'}.</span></div>` : null}
       <${Btn} disabled=${!sel || me.want === sel} onClick=${() => client.send({ a: 'choose', pid: sel })}>Sceller notre sort</${Btn}>
@@ -738,6 +738,6 @@ function Results({ client, pub, v }) {
     ${R.saved.map((s) => html`<div class="frow on" key=${s.id}><${Av} src=${names[s.id] && names[s.id].av} size=${32} /><span class="fname"><b>${names[s.id] ? `${names[s.id].name} ${names[s.id].last || ''}` : '?'}</b><span>${names[s.id] && names[s.id].mon}, sauvé à ${hm(s.at)}</span></span><${Icon} n="sparkles" s=${16} /></div>`)}
     ${R.exo.map((s) => html`<div class="frow" key=${s.id}><${Av} src=${names[s.id] && names[s.id].av} size=${32} /><span class="fname"><b>${names[s.id] ? `${names[s.id].name} ${names[s.id].last || ''}` : '?'}</b><span>${names[s.id] && names[s.id].mon}, exorcisé par ${by(s.by)}</span></span></div>`)}
     ${R.lost.map((id) => html`<div class="frow" key=${id}><${Av} src=${names[id] && names[id].av} size=${32} /><span class="fname"><b>${names[id] ? names[id].name : '?'}</b><span>${names[id] && names[id].mon}, resté dehors</span></span></div>`)}
-    <div class="bottom"><${Btn} onClick=${() => setKebab(true)}>Kebab time</${Btn}></div>
+    <div class="bottom sticky"><${Btn} onClick=${() => setKebab(true)}>Kebab time</${Btn}></div>
   </div>`;
 }

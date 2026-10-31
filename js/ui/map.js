@@ -3,13 +3,35 @@ import * as L from '../../vendor/leaflet.esm.js';
 import { html, useEffect, useRef } from './kit.js';
 import { ICONS } from './icons.js';
 
-const TILE = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+// Fonds de carte sans clé : Esri « gris foncé » (teinté orange en CSS), OpenStreetMap en secours
+const ESRI = [
+  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 16, className: 'tiles-esri', attribution: '© Esri, © OpenStreetMap' } },
+  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 16, className: 'tiles-esri-labels' } },
+];
+const OSM = { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opt: { maxZoom: 19, className: 'tiles-osm', attribution: '© OpenStreetMap' } };
+let useOsm = false;
+try { useOsm = sessionStorage.getItem('hw.tiles') === 'osm'; } catch {}
+
+function addBase(m) {
+  if (useOsm) { L.tileLayer(OSM.url, OSM.opt).addTo(m); return; }
+  const layers = ESRI.map((t) => L.tileLayer(t.url, t.opt).addTo(m));
+  let ok = 0;
+  let bad = 0;
+  layers[0].on('tileload', () => { ok += 1; });
+  layers[0].on('tileerror', () => {
+    bad += 1;
+    if (bad >= 4 && ok === 0 && !useOsm) {
+      useOsm = true;
+      try { sessionStorage.setItem('hw.tiles', 'osm'); } catch {}
+      layers.forEach((l) => m.removeLayer(l));
+      L.tileLayer(OSM.url, OSM.opt).addTo(m);
+    }
+  });
+}
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ico = (n, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`;
 
-// center/radius : la zone ; refuge : point de rassemblement (MJ seulement) ;
-// me {lat,lng,acc} ; mate {lat,lng} ; marks [{id,lat,lng,av,label,kind:'monstre'|'chasseur'|'faux',dim}]
 export function GameMap({ center, radius, refuge, me, mate, marks, onTap, className = '', blind, home = true, fitKey }) {
   const el = useRef(null);
   const map = useRef(null);
@@ -21,7 +43,7 @@ export function GameMap({ center, radius, refuge, me, mate, marks, onTap, classN
 
   useEffect(() => {
     const m = L.map(el.current, { zoomControl: false, attributionControl: true, center: [46.6, 2.4], zoom: 5, tap: true });
-    L.tileLayer(TILE, { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap © CARTO' }).addTo(m);
+    addBase(m);
     L.control.zoom({ position: 'topright', zoomInTitle: 'Zoomer', zoomOutTitle: 'Dézoomer' }).addTo(m);
     m.attributionControl.setPrefix(false);
     layer.current = L.layerGroup().addTo(m);

@@ -7,12 +7,12 @@ const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceSc
 const p = await ctx.newPage();
 const errs = [];
 p.on('pageerror', (e) => errs.push('pageerror ' + e.message));
-p.on('console', (m) => { if (m.type() === 'error' && !/tile|cartocdn|ERR_/.test(m.text())) errs.push('console ' + m.text()); });
+p.on('console', (m) => { if ((m.type() === 'error' && !/tile|cartocdn|ERR_|Failed to load/.test(m.text())) || /écran/.test(m.text())) errs.push('console ' + m.text().slice(0, 400)); });
 const shot = (n) => p.screenshot({ path: shots + n + '.png' });
 const click = (t) => p.getByRole('button', { name: t }).first().click();
 const view = (v) => p.locator('.demobar .seg button', { hasText: v }).click();
 const tab = (t) => p.locator('.mjtabs button', { hasText: t }).click();
-const step = async (name, fn) => { try { await fn(); } catch (e) { console.log('ÉCHEC', name, e.message.split('\n')[0]); await shot('zz-' + name); throw e; } };
+const step = async (name, fn) => { try { await fn(); } catch (e) { console.log('ÉCHEC', name, e.message.split('\n')[0]); console.log(errs.join('\n')); await shot('zz-' + name); throw e; } };
 
 await p.goto(URL);
 await p.waitForTimeout(1500);

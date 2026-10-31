@@ -1,5 +1,5 @@
 // Aiguillage : écran TV (hôte), panneau MJ, téléphone de joueur ou démo selon le lien.
-import { html, render, useState, useEffect, useSource, Btn, Ex, Icon, keepAwake } from './ui/kit.js';
+import { html, render, useState, useEffect, useSource, Btn, Ex, Icon, keepAwake, Title } from './ui/kit.js';
 import { TvApp } from './ui/tv.js';
 import { PlayerApp } from './ui/player.js';
 import { MjApp } from './ui/mj.js';
@@ -154,7 +154,7 @@ function Home() {
   };
   return html`<div class="home">
     <p class="eyebrow">Halloween, 31 octobre</p>
-    <${Ex} size=${64} depth=${8}>Le dernier<br />portail</${Ex}>
+    <${Title} max=${62} />
     <p class="lead" style="margin:20px 0 26px">Ouvre cette page sur l’ordinateur branché à la TV : il devient l’écran et le cerveau de la partie. Les joueurs rejoignent en scannant le QR code affiché.</p>
     ${saved ? html`<div class="card stack">
       <p class="lead">Une partie est en cours sur cet ordinateur, avec ${Object.values(saved.S.players).filter((p) => !p.gone).length} joueurs.</p>

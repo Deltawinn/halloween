@@ -64,6 +64,12 @@ export function Ex({ children, size = 52, depth = 6, className = '', tag = 'h1' 
   return html`<${T} class="disp ${className}" style=${{ fontSize: typeof size === 'number' ? size + 'px' : size, textShadow: shadow }}>${children}</${T}>`;
 }
 
+// « Le dernier portail » sur une seule ligne, à la largeur de l'écran
+export function Title({ max = 64, depth = 7, px }) {
+  const size = px || `min(calc((100vw - 54px) / 8.3), ${max}px)`;
+  return html`<${Ex} size=${size} depth=${depth} className="oneline">Le dernier portail</${Ex}>`;
+}
+
 export function Av({ src, size = 44, className = '' }) {
   return html`<span class="avf ${className}" style=${{ width: size + 8 + 'px', height: size + 8 + 'px' }}>
     ${src ? html`<img class="av" src=${src} width=${size} height=${size} alt="" />` : html`<span class="av av-empty" style=${{ width: size + 'px', height: size + 'px' }}><${Icon} n="user" s=${Math.round(size * 0.5)} /></span>`}

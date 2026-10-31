@@ -1,5 +1,5 @@
 // Installation de l'appli sur le téléphone, et scan du QR code de la TV depuis l'appli installée.
-import { html, useState, useEffect, useRef, Icon, Ex, Btn, Pill, Scene } from './kit.js';
+import { html, useState, useEffect, useRef, Icon, Ex, Btn, Pill, Scene, Title } from './kit.js';
 
 export const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -104,8 +104,8 @@ export function JoinScreen({ onOrganizer }) {
     ${!scan ? html`<div class="scene-bg" style="transform:translateY(-16%)"><${Scene} name="brume" className="scene" style="width:100%;height:100%" /></div>
       <div class="fade" style="background:linear-gradient(180deg,rgba(0,0,0,.5) 0%,transparent 20%,transparent 45%,#000 70%)"></div>` : null}
     <div class="pills" style="justify-content:center;margin-top:6px"><${Pill} or icon="moon-star">Halloween, 31 octobre</${Pill}></div>
-    <div class="grow" style=${{ minHeight: scan ? '2dvh' : '30dvh' }}></div>
-    <${Ex} size=${scan ? 44 : 60} depth=${8}>Le dernier<br />portail</${Ex}>
+    <div class="grow" style=${{ minHeight: scan ? '2dvh' : '22dvh' }}></div>
+    <${Title} />
     ${scan
       ? html`<div style="margin-top:18px"><${Scanner} /></div>
         <label class="field" style="margin-top:12px"><span class="label">Ou colle le lien d’invitation</span>

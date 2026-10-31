@@ -1,5 +1,5 @@
 // Écran TV : il fait tourner la partie (l'hôte) et affiche ce que tout le monde peut voir.
-import { html, useState, useEffect, useRef, useSource, useNow, Safe, Countdown, Icon, Ex, Av, Pill, Scene, QR, fmtShort, hm, plural, SYM_ICON } from './kit.js';
+import { html, useState, useEffect, useRef, useSource, useNow, Safe, Countdown, Icon, Ex, Av, Pill, Scene, QR, Title, fmtShort, hm, plural, SYM_ICON } from './kit.js';
 import { GameMap } from './map.js';
 import { play, unlockAudio, setSound, soundOn } from './sound.js';
 
@@ -86,7 +86,7 @@ function Accueil({ pub, host }) {
     <div class="scene-wrap" style="right:0;top:0;width:960px;height:1080px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 30%);mask-image:linear-gradient(90deg,transparent,#000 30%)"><${Scene} name="brume" className="scene" style="width:100%;height:100%" /></div>
     <div class="pg">
       <p class="tvlabel">Halloween, 31 octobre</p>
-      <${Ex} size=${170} depth=${12}>Le dernier<br />portail</${Ex}>
+      <${Title} px=${104} depth=${10} />
       <p class="tvlead" style="margin-top:28px">Scanne le code. Entre. Ne pose aucune question.</p>
       <div style="margin-top:56px;width:860px"><${Cast} pub=${pub} size=${96} /></div>
       ${!n ? html`<p class="tvlead muted" style="margin-top:20px">Aucune âme pour l’instant.</p>` : null}
