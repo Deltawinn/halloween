@@ -390,6 +390,7 @@ function Act3({ v, pub, send, clock, gps, sim }) {
     <${Clock} N=${N} clock=${clock} label="avant le dernier départ" />
     <${TimeBtns} N=${N} send=${send} />
     <div class="stats" style="margin:12px 0"><div class="stat"><b>${N.count.monstres}</b><span>encore dehors</span></div><div class="stat"><b>${N.count.sauves}</b><span>sauvés</span></div><div class="stat"><b>${N.count.exorcises}</b><span>exorcisés</span></div></div>
+    <p class="small muted" style="margin:0 0 12px">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés cherchent le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés. Toi, tu ne déclenches rien en y allant.'}</p>
     <p class="label">Les indices</p>
     ${(N.tiles || []).map((t) => html`<div class="erow" key=${t.k} style="cursor:default;opacity:${t.open ? 1 : 0.55}">
       <span class="n">${t.k + 1}</span><span class="t">${N.clues[t.k]}<small>${t.open ? 'Débloqué' : `Se débloque dans ${fmtShort(t.at - now)}`}</small></span></div>`)}
@@ -407,7 +408,7 @@ function Fin({ v, send }) {
       <div class="stat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
       <div class="stat"><b>${R.hunters.mj || 0}</b><span>captures pour toi</span></div>
     </div>
-    <p class="lead">${R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>
+    <p class="lead">${R.sealedBy ? (R.destroyed ? 'Le refuge a été détruit.' : 'Un exorcisé a atteint le refuge le premier.') : R.allCaught ? 'Tous les monstres ont été exorcisés : victoire des chasseurs.' : 'Le dernier portail est parti.'} Kebab time.</p>
     <div class="stack" style="margin-top:16px">
       <${Btn} kind="ghost" confirm="Effacer les scores et revenir à l’accueil ?" onClick=${() => send('nuit', 'reset')}>Préparer une nouvelle partie</${Btn}>
     </div>`;

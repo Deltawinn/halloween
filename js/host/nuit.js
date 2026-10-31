@@ -93,7 +93,7 @@ export const nuit = {
         st: 'evasion', startAt: now, endsAt: now + N.cfg.evasion * MIN, pausedAt: 0,
         found: {}, solved: {}, hints: {}, tries: 0, escapedAt: 0, timedOut: false, head: 0,
         powers: {}, status: {}, exo: {}, saved: {}, pos: {}, hpos: {}, sights: [], out: {}, lastOut: {},
-        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], revivedAll: false,
+        fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], onlyHunters: false, sealedBy: null, destroyed: false,
       });
       for (const p of E.list()) {
         const known = p.monster && MONSTERS.find((x) => x.name === p.monster.name);
@@ -252,7 +252,11 @@ export const nuit = {
       const now = E.now();
       const p = { lat, lng, acc: Math.round(Math.min(5000, Number(m.acc) || 0)), t: now };
       const st = N.status[pid];
-      if (st === 'exorcise') { N.hpos[pid] = p; return; }
+      if (st === 'exorcise') {
+        N.hpos[pid] = p;
+        if (N.st === 'refuge' && N.refugePt && haversine(N.refugePt, p) <= N.cfg.refugeR) seal(E, pid);
+        return;
+      }
       if (st !== 'monstre') return;
       N.pos[pid] = p;
       // hors zone
@@ -339,7 +343,7 @@ export const nuit = {
 
     read(E, { pid }, m) {
       const N = E.S.nuit;
-      if (N.st !== 'refuge' || N.status[pid] !== 'monstre' && N.status[pid] !== 'sauve') return;
+      if (N.st !== 'refuge' || !['monstre', 'sauve', 'exorcise'].includes(N.status[pid])) return;
       const k = Math.round(Number(m.k));
       if (!(k >= 0 && k < 5)) return;
       const r = (N.reads[pid] ||= {});
@@ -411,8 +415,9 @@ export const nuit = {
         v.sights = hunterSights(E);
         v.hpos = N.hpos;
         v.blindUntil = N.fx.blindUntil;
-        v.mine = Object.entries(N.exo).filter(([, x]) => x.by === pid).map(([id, x]) => ({ id, at: x.at, after: x.at - N.alertAt }));
+        v.mine = (N.exoLog || []).filter((x) => x.by === pid).map((x) => ({ id: x.id, at: x.at, after: x.at - N.alertAt }));
         v.exo = N.exo;
+        if (N.st === 'refuge') v.tiles = tiles(E, pid);
       }
       if (N.exo[pid]) v.exoBy = N.exo[pid];
       if (N.saved[pid]) v.savedAt = N.saved[pid];
@@ -453,7 +458,7 @@ function base(E) {
   const N = E.S.nuit;
   return {
     st: N.st, endsAt: N.endsAt, startAt: N.startAt, huntAt: N.huntAt, nextSight: N.nextSight, refugeAt: N.refugeAt,
-    alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, revivedAll: !!N.revivedAll, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
+    alertAt: N.alertAt, paused: !!N.pausedAt, pausedAt: N.pausedAt || 0, onlyHunters: !!N.onlyHunters, mapStyle: N.cfg.mapStyle || 'nuit', say: N.say, every: N.cfg.every, durations: { evasion: N.cfg.evasion, alerte: N.cfg.alerte, refuge: N.cfg.refuge },
     head: N.head, escapedAt: N.escapedAt, timedOut: N.timedOut,
     count: { monstres: countSt(E, 'monstre'), exorcises: countSt(E, 'exorcise'), sauves: countSt(E, 'sauve') },
   };
@@ -528,29 +533,48 @@ function toRefuge(E) {
   const N = E.S.nuit;
   if (N.st !== 'alerte') return;
   const now = E.now();
-  // si tout le monde a été exorcisé, le portail rappelle toutes les âmes : l'acte 3 se joue quand même
-  const allCaught = !countSt(E, 'monstre') && E.ids().length > 0;
-  if (allCaught) {
-    for (const id of E.ids()) if (N.status[id] === 'exorcise') { N.status[id] = 'monstre'; delete N.exo[id]; }
-    N.revivedAll = true;
-  }
+  // s'il ne reste que des exorcisés, ils doivent retrouver le refuge pour le détruire
+  const onlyHunters = !countSt(E, 'monstre') && E.ids().length > 0;
+  N.revivedAll = false;
+  N.onlyHunters = onlyHunters;
   N.st = 'refuge';
   N.refugeAt = now;
   N.endsAt = now + N.cfg.refuge * MIN;
   if (N.huntAt > now) N.huntAt = now;
-  if (allCaught) {
-    feed(E, 'Tous les monstres ont été exorcisés… mais le portail rappelle toutes les âmes. Course au refuge pour tout le monde.');
-    E.overlay({ kind: 'curse', title: 'Le portail vous rappelle', sub: 'Tous les monstres ont été exorcisés, mais le dernier portail réveille chaque âme. Rejoignez le point de rassemblement avant le dernier départ.', ms: 11000 });
-    for (const id of E.ids()) E.alert(id, 'Le portail te rappelle : tu redeviens un monstre. Rejoins le point de rassemblement !', 'ok', { page: 'refuge' });
+  if (onlyHunters) {
+    feed(E, 'Plus aucun monstre en liberté. Les exorcisés doivent retrouver le refuge pour le détruire.');
+    E.overlay({ kind: 'curse', title: 'Détruisez le refuge', sub: 'Tous les monstres ont été exorcisés. Retrouvez le refuge grâce aux indices et détruisez-le avant le dernier départ.', ms: 11000 });
+    for (const id of E.ids()) E.alert(id, 'Plus aucun monstre : retrouve le refuge grâce aux indices pour le détruire.', 'ok', { page: 'refuge' });
     return;
   }
-  feed(E, 'Fin de l’alerte générale. Les monstres cherchent le point de rassemblement.');
-  E.overlay({ kind: 'clue', title: 'Fin de l’alerte', sub: 'Les monstres encore libres doivent rejoindre le point de rassemblement avant le dernier départ.', ms: 9000 });
+  feed(E, 'Fin de l’alerte générale. Course au refuge : les monstres pour rentrer chez eux, les exorcisés pour les exorciser.');
+  E.overlay({ kind: 'clue', title: 'Course au refuge', sub: 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés.', ms: 11000 });
   for (const id of E.ids()) {
-    if (N.status[id] === 'monstre') E.alert(id, 'Bravo, les chasseurs ont abandonné le secteur. Rejoins le point de rassemblement.', 'ok', { page: 'refuge' });
-    else E.alert(id, 'Les monstres cherchent leur point de rassemblement. Continuez la traque.', 'info');
+    if (N.status[id] === 'monstre') E.alert(id, 'Rejoins le refuge pour rentrer chez toi. Si un exorcisé y arrive avant toi, tu seras exorcisé.', 'ok', { page: 'refuge' });
+    else E.alert(id, 'Trouve le refuge avant les monstres : si tu y arrives le premier, tous ceux encore dehors sont exorcisés.', 'info', { page: 'refuge' });
   }
 }
+
+// un exorcisé atteint le refuge : il exorcise tous les monstres encore dehors, ou détruit le refuge s'il n'en reste plus
+function seal(E, pid) {
+  const N = E.S.nuit;
+  if (N.st !== 'refuge') return;
+  const now = E.now();
+  const out = E.ids().filter((id) => N.status[id] === 'monstre');
+  for (const id of out) {
+    N.status[id] = 'exorcise';
+    N.exo[id] = { by: pid, at: now, sealed: true };
+    (N.exoLog ||= []).push({ id, by: pid, at: now, sealed: true });
+    E.alert(id, `${E.name(pid)} a atteint le refuge avant toi : tu es exorcisé.`, 'bad');
+  }
+  N.sealedBy = pid;
+  N.destroyed = !out.length;
+  feed(E, out.length ? `${E.full(pid)} atteint le refuge et exorcise ${out.map((id) => E.name(id)).join(', ')}.` : `${E.full(pid)} a trouvé le refuge et l’a détruit.`);
+  E.overlay({ kind: 'death', title: out.length ? 'Le refuge est tombé' : 'Refuge détruit', sub: out.length ? `${E.name(pid)} y est arrivé le premier : ${plural(out.length, 'monstre exorcisé', 'monstres exorcisés')}.` : `${E.name(pid)} l’a retrouvé et détruit.`, pid, ms: 9000 });
+  finish(E);
+}
+
+const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
 function finish(E) {
   const N = E.S.nuit;
@@ -565,8 +589,10 @@ function finish(E) {
     lost,
     hunters: countBy((N.exoLog || []).map((x) => x.by)),
     captures: (N.exoLog || []).length,
+    sealedBy: N.sealedBy || null,
+    destroyed: !!N.destroyed,
   };
-  N.results.allCaught = !N.results.saved.length && !lost.length;
+  N.results.allCaught = !N.results.saved.length && !lost.length && !N.sealedBy;
   feed(E, N.results.allCaught ? 'Tous les monstres ont été exorcisés : les chasseurs gagnent.' : 'Le dernier départ pour l’Hôtel Transylvanie a eu lieu.');
   E.overlay({
     kind: 'reveal',

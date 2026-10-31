@@ -185,7 +185,8 @@ function Refuge({ pub, clock }) {
       <div style="display:flex;align-items:baseline;gap:40px"><${Ex} size=${130} depth=${10}>Le refuge</${Ex}><span class="tvbig tnum" style="font-size:130px;text-shadow:${ext(10)}"><${Countdown} to=${N.endsAt} clock=${clock} /></span></div>
       <p class="tvlabel" style="margin-top:10px">avant le dernier départ pour l’Hôtel Transylvanie</p>
       <div class="tvtiles" style="margin-top:56px">${(N.tiles || []).map((t) => html`<div class=${t.open ? 'open' : ''} key=${t.k}><b>${t.k + 1}</b>${t.open ? 'Déverrouillé' : `dans ${fmtShort(t.at - now)}`}</div>`)}</div>
-      <p class="tvlead" style="margin-top:34px;color:var(--brume)">Chaque indice ne se lit qu’une fois, sur le téléphone des monstres encore libres.</p>
+      <p class="tvlead" style="margin-top:34px;color:var(--brume)">${N.onlyHunters ? 'Plus aucun monstre : les exorcisés doivent retrouver le refuge pour le détruire.' : 'Un monstre qui atteint le refuge rentre chez lui. Si un exorcisé l’atteint avant, tous les monstres encore dehors sont exorcisés.'}</p>
+      <p class="tvlabel" style="margin-top:14px">Chaque indice ne se lit qu’une fois, sur les téléphones.</p>
       <div style="display:flex;align-items:center;gap:24px;margin-top:60px">
         <p class="tvlabel" style="margin:0">${saved.length ? 'Déjà arrivés' : 'Personne n’est encore arrivé'}</p>
         <div style="display:flex;gap:12px">${saved.map((p) => html`<${Av} key=${p.id} src=${p.av} size=${64} className="glow" />`)}</div>
@@ -201,7 +202,7 @@ function Fin({ pub }) {
   return html`
     <div class="scene-wrap" style="right:0;top:0;width:760px;height:1080px;opacity:.8"><${Scene} name="lac" className="scene" style="width:100%;height:100%" /></div>
     <div class="pg" style="width:1250px">
-      <p class="tvlabel">Le dernier départ a eu lieu à ${hm(R.at || Date.now())}</p>
+      <p class="tvlabel">${R.sealedBy ? (R.destroyed ? 'Le refuge a été détruit' : 'Un exorcisé a atteint le refuge le premier') : `Le dernier départ a eu lieu à ${hm(R.at || Date.now())}`}</p>
       <${Ex} size=${150} depth=${12}>Fin de la nuit</${Ex}>
       <div style="display:flex;gap:14px;margin-top:50px">
         <div class="tvstat"><b>${R.saved.length}</b><span>monstres sauvés</span></div>

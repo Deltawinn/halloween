@@ -443,10 +443,11 @@ function Outside({ client, pub, v, clock }) {
   if (st === 'sauve') return html`<${Portal} pub=${pub} v=${v} />`;
   if (st === 'exorcise') {
     if (!seenExo) return html`<${Exorcised} pub=${pub} v=${v} go=${() => setExo(true)} />`;
+    if (N.st === 'refuge' && !seenRefuge) return html`<${EndAlert} hunter onlyHunters=${N.onlyHunters} go=${() => setRefuge(true)} />`;
     return html`<${Hunter} client=${client} pub=${pub} v=${v} clock=${clock} gps=${gps} sim=${sim} />`;
   }
   if (N.st === 'alerte' && !seenFlee) return html`<${Flee} N=${N} clock=${clock} go=${() => setFlee(true)} />`;
-  if (N.st === 'refuge' && !seenRefuge) return html`<${EndAlert} revived=${N.revivedAll} go=${() => setRefuge(true)} />`;
+  if (N.st === 'refuge' && !seenRefuge) return html`<${EndAlert} go=${() => setRefuge(true)} />`;
   return html`<${MonsterMap} client=${client} pub=${pub} v=${v} clock=${clock} gps=${gps} sim=${sim} />
     ${N.out && outLocal ? html`<${OutZone} N=${N} pos=${gps.pos} clock=${clock} back=${sim && N.center ? () => { setOutLocal(false); gps.moveTo(N.center); } : null} />` : null}`;
 }
@@ -467,14 +468,20 @@ function Flee({ N, clock, go }) {
   </div>`;
 }
 
-function EndAlert({ go, revived }) {
+function EndAlert({ go, hunter, onlyHunters }) {
+  const title = hunter ? (onlyHunters ? html`Détruis<br />le refuge` : html`La course<br />au refuge`) : 'Bravo';
+  const text = hunter
+    ? (onlyHunters
+      ? 'Tous les monstres ont été exorcisés. Retrouve leur refuge grâce aux indices et détruis-le avant le dernier départ.'
+      : 'Les monstres encore libres foncent vers leur refuge. Trouve-le grâce aux indices : si tu y arrives avant eux, tous les monstres encore dehors sont exorcisés.')
+    : 'Les chasseurs ont abandonné le secteur. Rejoins le refuge pour rentrer chez toi avant le dernier départ pour l’Hôtel Transylvanie.';
   return html`<div class="screen">
     <div class="scene-bg"><${Scene} name="rue" className="scene" style="width:100%;height:100%" /></div>
     <div class="grow" style="min-height:30dvh"></div>
     <p class="eyebrow">Fin de l’alerte générale</p>
-    <${Ex} size=${revived ? 48 : 64} depth=${8}>${revived ? html`Le portail<br />te rappelle` : 'Bravo'}</${Ex}>
-    <p class="lead" style="margin-top:14px">${revived ? 'Tous les monstres ont été exorcisés, mais le dernier portail réveille chaque âme. Tu redeviens un monstre : rejoins le point de rassemblement avant le dernier départ pour l’Hôtel Transylvanie.' : 'Les chasseurs ont abandonné le secteur. Rejoins le point de rassemblement avant le dernier départ pour l’Hôtel Transylvanie.'}</p>
-    <p class="lead ok" style="margin-top:12px">Attention aux chasseurs qui rôdent dans la ville.</p>
+    <${Ex} size=${hunter ? 50 : 64} depth=${8}>${title}</${Ex}>
+    <p class="lead" style="margin-top:14px">${text}</p>
+    <p class="lead ok" style="margin-top:12px">${hunter ? 'Les indices se débloquent toutes les 4 minutes.' : 'Attention : si un exorcisé atteint le refuge avant toi, tu seras exorcisé.'}</p>
     <div class="bottom"><${Btn} icon="lock-open" onClick=${go}>Voir les indices</${Btn}></div>
   </div>`;
 }
@@ -520,7 +527,8 @@ function MonsterMap({ client, pub, v, clock, gps, sim }) {
     ${sim ? html`<p class="sub">Démo : touche la carte pour te déplacer.</p>` : null}
     ${seeHunters ? html`<p class="sub ok">Tu vois les chasseurs pendant encore <${Countdown} to=${N.seeUntil} clock=${clock} short />.</p>` : null}
     ${refuge ? html`
-      <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 100 m du point de rassemblement, plus personne ne peut t’attraper.</span></div>
+      <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 100 m du refuge, plus personne ne peut t’attraper.</span></div>
+      <div class="row"><${Icon} n="triangle-alert" s=${16} /><span class="small">Si un exorcisé atteint le refuge avant toi, tu es exorcisé.</span></div>
 ` : null}
     <div class="btns" style="margin-top:8px">
       <${Btn} icon="zap" kind=${N.power && N.power.used ? 'ghost' : 'primary'} onClick=${() => setSheet('power')}>${N.power && N.power.used ? 'Pouvoir utilisé' : 'Mon pouvoir'}</${Btn}>
@@ -651,7 +659,9 @@ function Exorcised({ pub, v, go }) {
 function Hunter({ client, pub, v, clock, gps, sim }) {
   const N = v.nuit;
   const names = client.names();
+  const [show, setShow] = useState(null);
   useNow(5000);
+  if (show != null) return html`<${ClueRead} N=${N} k=${show} clock=${clock} speed=${pub.speed || 1} close=${() => setShow(null)} />`;
   const now = clock();
   const marks = [
     ...(N.sights || []).map((s) => {
@@ -664,10 +674,14 @@ function Hunter({ client, pub, v, clock, gps, sim }) {
   const last = (N.sights || []).filter((s) => s.kind === 'auto').reduce((a, s) => Math.max(a, s.t), 0);
   const huntersNames = (N.hunters || []).map((h) => h.name.split(' ')[0]).join(', ');
   const blind = N.blindUntil && N.blindUntil > now;
+  const refuge = N.st === 'refuge';
   return html`<div class="screen">
-    <${Head} act=${`Chasseurs : ${huntersNames}`} title="La chasse" to=${N.endsAt} clock=${clock}
-      sub=${N.st === 'refuge' ? 'avant le dernier départ' : 'avant la fin de l’alerte'} right=${plural(Object.keys(N.exo || {}).length, 'exorcisme')} />
-    <div style="position:relative;height:52dvh">
+    <${Head} act=${`Chasseurs : ${huntersNames}`} title=${refuge ? (N.onlyHunters ? 'Détruis le refuge' : 'La course') : 'La chasse'} to=${N.endsAt} clock=${clock}
+      sub=${refuge ? 'avant le dernier départ' : 'avant la fin de l’alerte'} right=${plural((N.mine || []).length, 'exorcisme')} />
+    ${refuge ? html`<p class="small muted" style="margin:0 0 10px">${N.onlyHunters ? 'Retrouve le refuge grâce aux indices pour le détruire.' : 'Atteins le refuge avant les monstres : tous ceux encore dehors seront exorcisés.'} Chaque indice s’autodétruit dès qu’il est lu.</p>
+      <${Tiles} client=${client} N=${N} clock=${clock} onRead=${(k) => setShow(k)} />
+      <div style="height:10px"></div>` : null}
+    <div style="position:relative;height:${refuge ? '36dvh' : '52dvh'}">
       <div class="mapbox" style="position:absolute;inset:0">
         <${GameMap} center=${N.center} radius=${N.radius} me=${gps.pos} marks=${marks} blind=${blind} mapStyle=${N.mapStyle} onTap=${sim ? (p) => gps.moveTo(p) : null} />
         <span class="pill maptag"><${Icon} n="radio" s=${14} />${last ? `Signalement il y a ${Math.max(0, Math.floor((now - last) / 60000))} min` : N.huntAt > now ? `Départ dans ${fmtShort(N.huntAt - now)}` : 'En attente du signalement'}</span>
@@ -712,7 +726,7 @@ function Results({ client, pub, v }) {
     return html`<div class="screen"><div class="grow"></div><${Ex} size=${72} depth=${10}>Kebab<br />time</${Ex}><p class="lead" style="margin-top:16px">La partie est finie. Tout le monde se retrouve pour manger.</p><div class="grow"></div><button class="link" onClick=${() => setKebab(false)}>Revoir les résultats</button></div>`;
   }
   return html`<div class="screen">
-    <p class="eyebrow">Le dernier départ a eu lieu à ${hm(R.at)}</p>
+    <p class="eyebrow">${R.sealedBy ? `${by(R.sealedBy)} ${R.destroyed ? 'a détruit le refuge' : 'a atteint le refuge le premier'} à ${hm(R.at)}` : `Le dernier départ a eu lieu à ${hm(R.at)}`}</p>
     <${Ex} size=${56} depth=${7}>Fin de<br />la nuit</${Ex}>
     <div class="stats" style="margin:20px 0 16px">
       <div class="stat"><b>${R.saved.length}</b><span>sauvés</span></div>

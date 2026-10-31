@@ -114,7 +114,9 @@ export class Bots {
       const m = (this.mem[b.id] ||= { pos: jitter(C, 40), speed: 1 + Math.random() * 0.8, wp: null });
       // choix de la destination
       const hunter = st === 'exorcise';
-      if (hunter) {
+      if (hunter && N.st === 'refuge' && N.refugePt && now - N.refugeAt > N.cfg.refuge * MIN * 0.7) {
+        m.wp = N.refugePt; // en fin de refuge, les exorcisés virtuels foncent au refuge
+      } else if (hunter) {
         const prey = N.sights.filter((s) => N.status[s.pid] === 'monstre').slice(-6);
         if (!m.wp || Math.random() < chance(0.5, dt)) m.wp = prey.length ? pick(prey) : jitter(C, R * 0.8);
       } else if (N.st === 'refuge' && N.refugePt && (m.goHome ??= Math.random() < 0.75) && now - N.refugeAt > (2 + (b.id.charCodeAt(4) % 8)) * MIN) {
@@ -131,7 +133,7 @@ export class Bots {
       }
       const hunting = now >= N.huntAt;
       if (hunter) {
-        N.hpos[b.id] = { lat: m.pos.lat, lng: m.pos.lng, acc: 8, t: now };
+        this.act(b.id, 'gps', { lat: m.pos.lat, lng: m.pos.lng, acc: 8 });
         if (!hunting) continue;
         continue;
       }
