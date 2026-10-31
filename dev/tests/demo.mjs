@@ -42,7 +42,7 @@ await shot('12-portrait');
 await step('continuer', () => click('Continuer'));
 await p.waitForTimeout(800);
 await shot('13-monstre');
-await step('monstre', async () => { await p.locator('.mt', { hasText: 'Ghostface' }).click(); await click('Continuer'); });
+await step('monstre', async () => { await p.locator('input.inp').fill('Ghostface'); await click('Continuer'); });
 await p.waitForTimeout(600);
 await shot('14-fiche');
 await step('fiche', () => click('Valider ma fiche'));
@@ -66,17 +66,18 @@ await p.setViewportSize({ width: 390, height: 844 });
 await view('Joueur');
 await p.waitForTimeout(500);
 await shot('20-evasion');
-await step('numero', async () => { for (const k of '237') await p.locator('.keys button', { hasText: k }).first().click(); await click('Ouvrir'); });
+const first = await p.evaluate(() => window.__host.E.S.nuit.escape.enigmas[1]);
+await step('numero', async () => { for (const k of first.num) await p.locator('.keys button', { hasText: k }).first().click(); await click('Ouvrir'); });
 await p.waitForTimeout(800);
 await shot('21-enigme');
-await step('reponse', async () => { await p.locator('input.inp').fill('six'); await click('Valider la réponse'); });
+await step('reponse', async () => { await p.locator('input.inp').fill(first.answers[0]); await click('Valider la réponse'); });
 await p.waitForTimeout(800);
 await shot('22-enigme-ok');
 for (let i = 0; i < 50; i++) {
   await p.waitForTimeout(3000);
   const t = await p.textContent('body');
   if (/Voir la carte/.test(t)) break;
-  if (i === 5) { await p.locator('.tab', { hasText: 'cadenas' }).click(); await p.waitForTimeout(300); await shot('23-cadenas'); }
+  if (i === 5 && await p.locator('.tab', { hasText: 'cadenas' }).count()) { await p.waitForTimeout(300); await shot('23-cadenas'); }
 }
 await shot('24-fuyez');
 await p.setViewportSize({ width: 1280, height: 764 });
@@ -96,9 +97,7 @@ await view('MJ');
 await tab('Acte 2');
 await p.waitForTimeout(2500);
 await shot('07-mj-chasse');
-await p.locator('.seg button', { hasText: 'Vue arbitre' }).click();
-await p.waitForTimeout(1500);
-await shot('08-mj-arbitre');
+
 // accélère, puis hors zone
 await tab('Démo');
 await p.locator('.seg button', { hasText: '×20' }).click();
@@ -128,7 +127,11 @@ await shot('29b-chasseur');
 await view('MJ');
 await tab('Acte 2');
 await p.waitForTimeout(500);
-await step('ramener', async () => { await p.locator('.frow', { hasText: 'Testeur' }).last().click(); await click('Redevenir monstre'); await click('Le ramener ?'); });
+await step('ramener', async () => {
+  await p.locator('.frow', { hasText: 'Testeur' }).last().click();
+  // un monstre virtuel a pu le ramener avec son Électrochoc
+  if (await p.getByRole('button', { name: 'Redevenir monstre' }).count()) { await click('Redevenir monstre'); await click('Le ramener ?'); }
+});
 await step('refuge', async () => { await click('Finir l’alerte et passer au refuge'); await click('Finir l’alerte maintenant ?'); await p.waitForTimeout(1500); });
 await shot('09-mj-refuge');
 await view('Joueur');

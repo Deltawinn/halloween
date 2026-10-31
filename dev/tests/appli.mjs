@@ -34,10 +34,10 @@ await p.getByRole('button', { name: /Continuer sans installer|Entrer dans la par
 await p.getByRole('button', { name: 'Lancer l’analyse' }).click({ timeout: 15000 });
 await p.locator('input.inp').nth(0).fill('Echo');
 await p.getByRole('button', { name: 'Continuer' }).click();
-await p.locator('.mt').first().waitFor({ timeout: 15000 });
+await p.getByRole('heading', { name: 'Ton monstre' }).waitFor({ timeout: 15000 });
 // réouverture de l'icône : on retombe dans la partie, déjà inscrit
 await p.goto(BASE + '&app=1');
-await p.locator('.mt').first().waitFor({ timeout: 15000 });
+await p.getByRole('heading', { name: 'Ton monstre' }).waitFor({ timeout: 15000 });
 console.log('réouverture OK :', (await p.textContent('h1')).trim());
 // le Mac garde la page d'accueil de l'organisateur
 const mac = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();

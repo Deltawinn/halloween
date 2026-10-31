@@ -43,57 +43,63 @@ export const MONSTERS = [
 export const CUSTOM_POWERS = ['hide', 'decoy', 'fake', 'see', 'hide5', 'blind'];
 
 // Symboles des chiffres du cadenas (ordre donné par l'ultime énigme)
-export const SYMBOLS = { skull: 'Le crâne', moon: 'La lune', eye: 'L\'œil', flame: 'La flamme' };
+export const SYMBOLS = { skull: 'Le crâne', moon: 'La lune', eye: 'L\'œil', flame: 'La flamme', ghost: 'Le fantôme' };
 
-// L'évasion : chaque énigme a pour réponse un chiffre du cadenas.
-// L'ultime énigme donne l'ordre des symboles, en devinettes : la tête sans chair (crâne),
-// ce qui change l'homme en loup (lune), ce qui voit tout (œil), ce qui brûlait les sorcières (flamme)
-// → crâne, lune, œil, flamme → 2 6 3 9.
+// L'évasion : 5 cartes numérotées cachées dans le salon et la cuisine. Au lancement, l'appli tire au sort
+// 5 énigmes dans la réserve de 20 et les attache aux cartes. Chaque bonne réponse révèle un chiffre et son
+// symbole. Quatre symboles forment le code ; le cinquième (le fantôme) est un leurre que l'ultime énigme ignore.
+
 export const DEFAULT_ESCAPE = {
   code: '2639',
   order: ['skull', 'moon', 'eye', 'flame'],
-  ultimate: 'Quatre gardiens dorment sur la porte. Lis le code dans l\'ordre de leur réveil.\nCelui qui change l\'homme en loup ne se lève qu\'après que la tête sans chair a parlé.\nCelui qui brûlait les sorcières s\'allume le dernier, quand tous les autres le regardent.\nCelui qui voit tout n\'ouvre ses paupières qu\'une fois le loup réveillé.',
-  enigmas: [
-    {
-      num: '13', room: 'Salon', sym: 'skull',
-      q: 'Devant le miroir, il faut prononcer son nom cinq fois pour qu\'il vienne avec son crochet. Pour faire sortir l\'autre de sa maquette, trois fois suffisent. Combien de fois de plus faut-il appeler le premier que le second ?',
-      answers: ['2', 'deux'],
-      hint: 'Le premier, c\'est Candyman. Le second, Beetlejuice.',
-    },
-    {
-      num: '237', room: 'Salon', sym: 'moon',
-      q: 'Additionne les chiffres de la chambre interdite de l\'hôtel Overlook, puis divise par le nombre de sœurs qui attendent Danny au bout du couloir.',
-      answers: ['6', 'six'],
-      hint: 'La chambre interdite porte le numéro de cette carte. Les sœurs, ce sont les jumelles de Shining.',
-    },
-    {
-      num: '666', room: 'Cuisine', sym: 'eye',
-      q: 'Prends le jour du mois où Jason frappe à Crystal Lake. Retire le dernier nombre de la comptine que chantent les fillettes quand Freddy approche. Que reste-t-il ?',
-      answers: ['3', 'trois'],
-      hint: 'Vendredi 13. La comptine commence par « Un, deux, Freddy te coupe en deux » et s\'arrête à dix.',
-    },
-    {
-      num: '1408', room: 'Cuisine', sym: 'flame',
-      q: 'Combien de jours te reste-t-il à vivre après avoir regardé la cassette maudite ? Ajoute le nombre de tueurs cachés sous le masque de Ghostface dans le premier Scream.',
-      answers: ['9', 'neuf'],
-      hint: 'The Ring : sept jours. Scream : Billy et Stu.',
-    },
+  count: 5,
+  cards: [
+    { num: '13', room: 'Salon' },
+    { num: '237', room: 'Salon' },
+    { num: '666', room: 'Cuisine' },
+    { num: '1408', room: 'Cuisine' },
+    { num: '1428', room: 'Salon' },
   ],
+  ultimate: 'Quatre gardiens dorment sur la porte. Lis le code dans l\'ordre de leur réveil.\nCelui qui change l\'homme en loup ne se lève qu\'après que la tête sans chair a parlé.\nCelui qui brûlait les sorcières s\'allume le dernier, quand tous les autres le regardent.\nCelui qui voit tout n\'ouvre ses paupières qu\'une fois le loup réveillé.',
+  enigmas: [],
 };
 
-// Indices d'exemple : les vrais se tapent dans le panneau du MJ et restent sur l'écran TV,
-// pour que le lieu du rendez-vous n'apparaisse jamais dans le code public.
+// La réserve de 20 énigmes (tirées au sort à chaque partie)
+export const ENIGMA_POOL = [
+  { q: 'Je vis dans les égouts de Derry, je flotte avec mes ballons rouges et je me réveille tous les 27 ans. Qui suis-je ?', answers: ['grippe sou', 'grippesou', 'pennywise', 'ca'], hint: 'Un clown, dans un roman de Stephen King.' },
+  { q: 'Dans « Shining », quel est le numéro de la chambre de l’hôtel Overlook où Danny n’aurait jamais dû entrer ?', answers: ['237'], hint: 'Trois chiffres. Leur somme fait 12.' },
+  { q: 'Tu viens de regarder la cassette maudite et le téléphone sonne. Combien de jours te reste-t-il à vivre ?', answers: ['7', 'sept'], hint: 'The Ring. Une semaine.' },
+  { q: 'Une maison neuve, une télévision qui grésille, et une fillette qui se retourne pour annoncer « Ils sont là ». Quel film ?', answers: ['poltergeist'], hint: 'Un film de 1982 produit par Steven Spielberg.' },
+  { q: 'Dis son nom cinq fois face au miroir et il apparaît derrière toi, un crochet à la place de la main. Qui est-il ?', answers: ['candyman'], hint: 'Son nom évoque des bonbons.' },
+  { q: 'Le tueur Charles Lee Ray a transféré son âme dans une poupée « Brave Gars ». Comment s’appelle-t-elle ?', answers: ['chucky'], hint: '« Jeu d’enfant », 1988.' },
+  { q: 'Dans « Psychose », comment s’appelle le gérant timide du motel qui parle beaucoup de sa mère ?', answers: ['norman bates', 'bates', 'norman'], hint: 'Le motel porte son nom de famille.' },
+  { q: 'Pull rayé rouge et vert, chapeau, gant à lames. Qui hante les rêves des adolescents d’Elm Street ?', answers: ['freddy', 'krueger', 'freddy krueger'], hint: '« Les Griffes de la nuit ».' },
+  { q: 'Quel jour de la semaine Jason Voorhees est-il réputé frapper à Crystal Lake ?', answers: ['vendredi'], hint: 'Le titre du film contient aussi le chiffre 13.' },
+  { q: 'Le masque de Ghostface dans « Scream » est inspiré d’un tableau célèbre. Lequel ? (le titre ou le peintre)', answers: ['le cri', 'cri', 'munch', 'edvard munch'], hint: 'Un tableau norvégien de 1893.' },
+  { q: 'Pour garder un Mogwai, il ne faut pas le mouiller, pas l’exposer à la lumière… et surtout, quoi faire après minuit ?', answers: ['nourrir', 'le nourrir', 'manger', 'nourriture'], hint: 'Gremlins : c’est une question de repas.' },
+  { q: 'Dans « L’Exorciste », quel est le prénom de la fillette de 12 ans possédée par un démon ?', answers: ['regan'], hint: 'Son nom de famille est MacNeil.' },
+  { q: 'Dans « Hellraiser », comment surnomme-t-on le chef des cénobites, au crâne hérissé de clous ?', answers: ['pinhead'], hint: 'Son surnom anglais évoque des épingles.' },
+  { q: 'En 1999, trois étudiants partent filmer une légende dans une forêt du Maryland et ne reviennent jamais. Quel film ?', answers: ['blair witch', 'projet blair witch', 'le projet blair witch', 'blair'], hint: 'Le nom d’une sorcière.' },
+  { q: 'Dans quel film un petit garçon confie-t-il, terrifié : « Je vois des gens qui sont morts » ?', answers: ['sixieme sens', 'le sixieme sens', '6e sens', '6eme sens'], hint: 'Bruce Willis joue un psychologue.' },
+  { q: 'Masque blanc, combinaison de mécano : quel tueur s’évade de l’asile pour revenir à Haddonfield le soir d’Halloween ?', answers: ['michael myers', 'myers', 'michael'], hint: 'Il avait tué sa sœur à l’âge de six ans.' },
+  { q: 'Dans « Massacre à la tronçonneuse », avec quoi Leatherface fabrique-t-il ses masques ?', answers: ['peau', 'peau humaine', 'de la peau'], hint: 'Son surnom te donne la réponse en anglais.' },
+  { q: 'Quelle poupée est enfermée dans une vitrine du musée des Warren, avec un panneau qui interdit formellement de l’ouvrir ?', answers: ['annabelle'], hint: 'Elle a un film à son nom, dérivé de « Conjuring ».' },
+  { q: 'Dans une base en Antarctique, une créature venue de l’espace imite parfaitement chacune de ses victimes. Quel film de John Carpenter ?', answers: ['the thing', 'thing', 'la chose', 'the thing 1982'], hint: 'En français, on dirait « la chose ».' },
+  { q: '« Je veux jouer à un jeu. » Comment surnomme-t-on le tueur de « Saw », qui piège ses victimes dans des jeux mortels ?', answers: ['jigsaw', 'john kramer', 'kramer'], hint: 'Le mot anglais pour un puzzle.' },
+];
+
+// Indices du refuge : du plus énigmatique au plus évident, le cinquième donne la réponse.
 export const DEFAULT_CLUES = [
-  'Indice 1 : à écrire dans le panneau du maître du jeu.',
-  'Indice 2 : à écrire dans le panneau du maître du jeu.',
-  'Indice 3 : à écrire dans le panneau du maître du jeu.',
-  'Indice 4 : à écrire dans le panneau du maître du jeu.',
-  'Indice 5 : à écrire dans le panneau du maître du jeu.',
+  'Votre refuge a un toit, mais aucun mur.',
+  'On y monte quelques marches pour être vu et entendu de tous. L’été, des musiciens y jouent.',
+  'Il se dresse sur une place qui porte le nom de l’auteur du « Temps des cerises », poète de la Commune de Paris.',
+  'Cherchez la place Jean-Baptiste-Clément.',
+  'Le kiosque à musique de la place Jean-Baptiste-Clément.',
 ];
 
 export const DEFAULT_CFG = {
   evasion: 30, alerte: 30, refuge: 20, every: 5, radius: 1000,
-  refugeR: 40, safeR: 100, clueAt: [20, 16, 12, 8, 4], readSecs: 15, mapStyle: 'nuit',
+  refugeR: 30, safeR: 50, clueAt: [20, 16, 12, 8, 4], readSecs: 15, mapStyle: 'nuit',
 };
 
 // Styles de carte proposés au MJ (fonds sans clé)

@@ -94,7 +94,7 @@ export class Bots {
       const m = (this.mem['e' + e.num] ||= { at: f.at + (3 + Math.random() * 4) * MIN });
       if (now >= m.at) this.act(pick(bots).id, 'answer', { num: e.num, text: e.answers[0] });
     }
-    if (Object.keys(N.solved).length === 4) {
+    if (enig.length && Object.keys(N.solved).length === enig.length) {
       const last = Math.max(...Object.values(N.solved).map((s) => s.at));
       const m = (this.mem.code ||= { at: last + (2 + Math.random() * 2) * MIN, tried: false });
       if (!m.tried && now >= m.at - MIN) { m.tried = true; this.act(pick(bots).id, 'code', { code: '0000' }); }

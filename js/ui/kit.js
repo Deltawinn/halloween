@@ -207,7 +207,7 @@ export async function keepAwake() {
   return false;
 }
 
-export const SYM_ICON = { skull: 'skull', moon: 'moon', eye: 'eye', flame: 'flame' };
+export const SYM_ICON = { skull: 'skull', moon: 'moon', eye: 'eye', flame: 'flame', ghost: 'ghost' };
 
 // Filet de sécurité : si un écran plante (données pas encore arrivées), on réessaie au lieu de figer l'appli
 export class Safe extends Component {

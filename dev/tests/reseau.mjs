@@ -53,7 +53,8 @@ for (const [first, last, mon] of names) {
   await p.locator('input.inp').nth(0).fill(first);
   await p.locator('input.inp').nth(1).fill(last);
   await p.getByRole('button', { name: 'Continuer' }).click();
-  await p.locator('.mt', { hasText: mon }).click({ timeout: 20000 });
+  await p.getByRole('heading', { name: 'Ton monstre' }).waitFor({ timeout: 20000 });
+  await p.locator('input.inp').fill(mon);
   await p.getByRole('button', { name: 'Continuer' }).click();
   await p.getByRole('button', { name: 'Valider ma fiche' }).click({ timeout: 15000 });
   P.push({ p, first, ctx });
@@ -73,9 +74,10 @@ try { await P[0].p.getByText('L’Évasion').waitFor({ timeout: 15000 }); } catc
   console.log(errs.join('\n')); throw e;
 }
 // énigmes
-const enig = [['13', 'deux'], ['237', '6'], ['666', 'trois'], ['1408', '9']];
-for (let i = 0; i < 4; i++) {
-  const p = P[i].p;
+const enig = await tv.evaluate(() => window.__host.E.S.nuit.escape.enigmas.map((e) => [e.num, e.answers[0]]));
+for (let i = 0; i < enig.length; i++) {
+  const p = P[i % 4].p;
+  if (i >= 4) await p.getByRole('button', { name: 'Retour' }).first().click();
   for (const k of enig[i][0]) await p.locator('.keys button', { hasText: k }).first().click();
   await p.getByRole('button', { name: 'Ouvrir' }).click();
   await p.locator('input.inp').waitFor({ timeout: 15000 });
@@ -85,12 +87,11 @@ for (let i = 0; i < 4; i++) {
 }
 await wait(1500);
 await tv.screenshot({ path: shots + 'n-tv-evasion.png' });
-const p0 = P[0].p;
+const p0 = P[1].p;
 await p0.getByRole('button', { name: 'Retour' }).first().click();
-await p0.locator('.tab', { hasText: 'cadenas' }).click();
 await p0.getByRole('heading', { name: /ultime/ }).waitFor({ timeout: 15000 });
 await p0.screenshot({ path: shots + 'n-p-ultime.png' });
-await p0.locator('.codein').fill('2639');
+await p0.locator('.codein').fill(await tv.evaluate(() => window.__host.E.S.nuit.escape.code));
 await p0.getByRole('button', { name: 'Tenter le code' }).click();
 await p0.getByRole('heading', { name: 'Fuyez' }).waitFor({ timeout: 15000 });
 for (const x of P) await x.p.getByRole('button', { name: 'Voir la carte' }).click({ timeout: 15000 });

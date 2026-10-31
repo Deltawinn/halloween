@@ -30,24 +30,38 @@ assert.equal(E.playerView('p0').nuit.power, undefined, 'pouvoir caché avant la 
 mj('start');
 assert.equal(E.S.nuit.st, 'evasion');
 assert.ok(E.playerView('p0').nuit.power.name);
-// évasion
+// évasion : 5 énigmes tirées au sort dans la réserve de 20
+const X = E.S.nuit.escape;
+assert.equal(X.enigmas.length, 5);
+assert.equal(new Set(X.enigmas.map((e) => e.q)).size, 5, 'cinq énigmes différentes');
+assert.deepEqual(X.enigmas.map((e) => e.num), ['13', '237', '666', '1408', '1428']);
+assert.equal(X.enigmas.filter((e) => e.sym === 'ghost').length, 1, 'un leurre');
+// pouvoirs fixés pour la suite du test
+for (const id of ids) E.S.nuit.powers[id] = { id: 'hide', used: false };
+Object.assign(E.S.nuit.powers, { p2: { id: 'fake', used: false }, p4: { id: 'immune', used: false } });
+assert.equal(E.playerView('p0').nuit.enigmas.filter((e) => e.found).length, 0, 'aucun numéro connu avant d’être tapé');
+assert.equal(E.playerView('p0').nuit.enigmas[0].num, undefined);
 act('p0', 'num', { n: '999' });
-act('p0', 'num', { n: '237' });
-act('p1', 'answer', { num: '237', text: '5' });
-assert.ok(!E.S.nuit.solved['237'], 'mauvaise réponse refusée');
-act('p1', 'answer', { num: '237', text: 'Six' });
-act('p2', 'num', { n: '666' }); act('p2', 'answer', { num: '666', text: 'il en reste 3' });
-act('p3', 'num', { n: '1408' }); act('p3', 'hint', { num: '1408' }); act('p3', 'answer', { num: '1408', text: 'neuf' });
-act('p4', 'num', { n: '13' }); act('p4', 'answer', { num: '13', text: '2' });
+const e0 = X.enigmas[0];
+act('p0', 'num', { n: e0.num });
+act('p1', 'answer', { num: e0.num, text: 'mauvaise réponse' });
+assert.ok(!E.S.nuit.solved[e0.num], 'mauvaise réponse refusée');
+act('p1', 'answer', { num: e0.num, text: e0.answers[0].toUpperCase() });
+assert.ok(E.S.nuit.solved[e0.num]);
+X.enigmas.slice(1).forEach((e, i) => {
+  const pid = 'p' + (i + 2);
+  act(pid, 'num', { n: e.num });
+  if (i === 1) act(pid, 'hint', { num: e.num });
+  act(pid, 'answer', { num: e.num, text: 'je crois que c’est ' + e.answers[0] });
+});
 const pv = E.playerView('p5').nuit;
-assert.equal(pv.solved, 4);
+assert.equal(pv.solved, 5);
 assert.ok(pv.ultimate);
-assert.deepEqual(pv.enigmas.map((e) => e.digit).sort().join(''), '2369');
-for (const e of pv.enigmas) assert.equal(e.digit, { 13: '2', 237: '6', 666: '3', 1408: '9' }[e.num], 'la réponse est le chiffre');
+for (const e of pv.enigmas) if (e.sym !== 'ghost') assert.equal(e.digit, X.code[X.order.indexOf(e.sym)], 'chiffre du symbole');
 T += 10 * MIN;
 act('p5', 'code', { code: '1111' });
 assert.equal(E.S.nuit.tries, 1);
-act('p5', 'code', { code: '2639' });
+act('p5', 'code', { code: X.code });
 assert.equal(E.S.nuit.st, 'alerte');
 assert.equal(E.S.nuit.head, 5, 'avance : max 6 min, moins 1 indice');
 // traque
@@ -100,7 +114,7 @@ assert.equal(E.playerView('p2').nuit.tiles[0].state, 'burnt');
 T += 4 * MIN;
 assert.equal(E.playerView('p2').nuit.tiles[1].state, 'open');
 // pas de capture près du refuge
-act('p6', 'gps', { lat: R.lat + 0.0006, lng: R.lng, acc: 5 });
+act('p6', 'gps', { lat: R.lat + 0.0004, lng: R.lng, acc: 5 }); // 44 m : dans la zone protégée de 50 m
 act('p6', 'caught', { by: 'mj' });
 assert.equal(E.S.nuit.status.p6, 'monstre');
 // arrivée
@@ -135,11 +149,12 @@ E.handle({ mj: true }, { g: 'nuit', a: 'reset' });
 E.handle({ mj: true }, { g: 'nuit', a: 'start' });
 E.handle({ mj: true }, { g: 'nuit', a: 'next' });
 for (const id of ids) act(id, 'caught', { by: 'mj' });
-act('p4', 'caught', { by: 'mj' }); // Jason se relève une première fois
+for (const id of ids) act(id, 'caught', { by: 'mj' }); // l'immunisé se relève une fois
 assert.equal(E.S.nuit.st, 'refuge', 'acte 3 même si tout le monde est exorcisé');
 assert.ok(E.publicView({}).nuit.onlyHunters);
 act('p3', 'gps', { lat: R.lat, lng: R.lng, acc: 5 });
 assert.equal(E.S.nuit.st, 'fin');
 assert.ok(E.S.nuit.results.destroyed, 'refuge détruit');
-assert.equal(E.S.nuit.results.captures, 10, 'les captures de l’acte 2 restent comptées');
+assert.ok(E.S.nuit.results.captures >= 10, 'les captures de l’acte 2 restent comptées');
+assert.equal(E.S.nuit.results.ranking.length, 10, 'classement');
 console.log('nuit : OK');

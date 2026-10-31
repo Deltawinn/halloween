@@ -153,12 +153,12 @@ function Selfie({ onDone }) {
   </div>`;
 }
 
-const STYLES = [['affiche', 'Affiche'], ['vhs', 'VHS'], ['pixel', 'Pixel']];
+const STYLES = [['pixel', 'Pixel']];
 
 function Portrait({ shot, retake, onDone, names }) {
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
-  const [style, setStyle] = useState('affiche');
+  const [style, setStyle] = useState('pixel');
   const [sending, setSending] = useState(false);
   const looks = useMemo(() => {
     if (!shot) return {};
@@ -202,35 +202,20 @@ function Lobby({ client, pub, v }) {
   return html`<${Waiting} pub=${pub} me=${me} back=${() => setFiche(false)} />`;
 }
 
-function Monster({ client, pub, me, done }) {
-  const [q, setQ] = useState('');
-  const [sel, setSel] = useState(me.monster ? me.monster.name : null);
-  const [custom, setCustom] = useState(me.monster && me.monster.custom ? me.monster.name : null);
-  const taken = {};
-  for (const p of pub.players || []) if (p.id !== me.id && p.mon) taken[p.mon] = p.name;
-  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const list = MONSTERS.filter((m) => !q || norm(m.name + ' ' + m.film).includes(norm(q)));
-  const go = () => {
-    client.send({ a: 'monster', name: custom != null ? custom.trim() : sel });
-    done();
-  };
+function Monster({ client, me, done }) {
+  const [name, setName] = useState(me.monster ? me.monster.name : '');
+  const go = () => { client.send({ a: 'monster', name: name.trim() }); done(); };
   return html`<div class="screen">
     <div class="topbar"><span>Ton identité</span><span>3 sur 3</span></div>
     <${Steps} n=${3} of=${3} />
-    <${Ex} size=${52}>Ton rôle</${Ex}>
-    <p class="lead muted" style="margin:10px 0 16px">Choisis le monstre de ton costume.</p>
-    ${custom != null
-      ? html`<label class="field"><span class="label">Nom de ton monstre</span><input class="inp" maxlength="30" value=${custom} onInput=${(e) => setCustom(e.target.value)} placeholder="Ex. : La Dame blanche" /></label>
-          <p class="sub">Un pouvoir te sera attribué au début de la partie.</p>`
-      : html`<label class="search"><${Icon} n="search" s=${16} /><input value=${q} placeholder="Cherche ton monstre" onInput=${(e) => setQ(e.target.value)} /></label>
-        <div class="mgrid">
-          ${list.map((m) => html`<button key=${m.name} class="mt ${sel === m.name ? 'on' : ''} ${taken[m.name] ? 'taken' : ''}" onClick=${() => setSel(m.name)}>
-            <b>${m.name}</b><span>${taken[m.name] ? `Déjà pris par ${taken[m.name]}` : m.film}</span>
-          </button>`)}
-        </div>`}
-    <div class="bottom sticky">
-      <${Btn} disabled=${custom != null ? !custom.trim() : !sel} onClick=${go}>Continuer</${Btn}>
-      <button class="link" onClick=${() => setCustom(custom == null ? '' : null)}>${custom == null ? 'Autre monstre : tape son nom' : 'Revenir à la liste'}</button>
+    <${Ex} size=${52}>Ton monstre</${Ex}>
+    <p class="lead muted" style="margin:10px 0 18px">Quel monstre incarnes-tu ce soir ? Tape le nom de ton costume.</p>
+    <label class="field"><span class="label">Nom de ton monstre</span>
+      <input class="inp" maxlength="30" value=${name} placeholder="Ex. : Art le Clown, la Nonne, un vampire…" onInput=${(e) => setName(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === 'Enter' && name.trim()) go(); }} /></label>
+    <p class="sub">Un pouvoir secret te sera attribué au début de la partie.</p>
+    <div class="bottom">
+      <${Btn} disabled=${!name.trim()} onClick=${go}>Continuer</${Btn}>
     </div>
   </div>`;
 }
@@ -245,7 +230,6 @@ function Fiche({ me, ok, editPhoto, editMonster }) {
       <div style="min-width:0">
         <p class="eyebrow">${me.name} ${me.last || ''}</p>
         <${Ex} size=${34} depth=${4} tag="h2">${me.monster.name}</${Ex}>
-        <p class="sub">${me.monster.film}</p>
       </div>
     </div>
     <div class="sealed" style="margin-top:8px">
@@ -289,21 +273,23 @@ function Evasion({ client, pub, v, clock }) {
   const [open, setOpen] = useState(null);
   const [pw, setPw] = useState(false);
   const solved = N.solved;
+  const allSolved = N.total > 0 && solved === N.total;
   const found = N.enigmas.filter((e) => e.found).length;
+  useEffect(() => { if (allSolved) setTab('lock'); }, [allSolved]);
   const cur = open && N.enigmas.find((e) => e.num === open);
   const head = html`<div class="topbar"><span>Acte 1 · Avance : ${N.projectedHead} min</span>
     ${N.power ? html`<button class="pill or" style="cursor:pointer" onClick=${() => setPw(true)}><${Icon} n="zap" s=${13} />Ton pouvoir</button>` : null}</div>`;
   let body;
   if (cur) body = html`<${Enigma} client=${client} e=${cur} N=${N} close=${() => setOpen(null)} head=${head} />`;
   else if (tab === 'num') body = html`<${NumPad} client=${client} N=${N} clock=${clock} head=${head} onOpen=${(n) => setOpen(n)} />`;
-  else if (tab === 'list') body = html`<${EnigmaList} N=${N} head=${head} onOpen=${(n) => setOpen(n)} />`;
+  else if (tab === 'list' || !allSolved) body = html`<${EnigmaList} N=${N} head=${head} onOpen=${(n) => setOpen(n)} />`;
   else body = html`<${Padlock} client=${client} N=${N} head=${head} />`;
   return html`<div class="screen has-tabs">${body}</div>
     ${pw ? html`<${PowerSheet} client=${client} v=${v} pub=${pub} close=${() => setPw(false)} />` : null}
     <nav class="tabs">
       <button class="tab ${tab === 'num' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('num'); }}><${Icon} n="hash" s=${20} />Numéro</button>
       <button class="tab ${tab === 'list' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('list'); }}><${Icon} n="list" s=${20} />Énigmes${found ? html`<span class="badge">${found}</span>` : null}</button>
-      <button class="tab ${tab === 'lock' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('lock'); }}><${Icon} n=${solved === 4 ? 'key-round' : 'lock'} s=${20} />Le cadenas${solved === 4 ? html`<span class="badge">!</span>` : null}</button>
+      ${allSolved ? html`<button class="tab ${tab === 'lock' && !cur ? 'on' : ''}" onClick=${() => { setOpen(null); setTab('lock'); }}><${Icon} n="key-round" s=${20} />Le cadenas<span class="badge">!</span></button>` : null}
     </nav>`;
 }
 
@@ -334,8 +320,8 @@ function NumPad({ client, N, clock, head, onOpen }) {
     <div class="big tnum" style="margin-top:6px"><${Countdown} to=${N.endsAt} clock=${clock} /></div>
     <${Load} from=${N.startAt} to=${N.endsAt} clock=${clock} />
     <div class="pills" style="margin:14px 0 18px">
-      <${Pill} or>${plural(N.solved, 'énigme résolue', 'énigmes résolues')} sur 4</${Pill}>
-      <${Pill}>${N.solved} chiffre${N.solved > 1 ? 's' : ''} sur 4</${Pill}>
+      <${Pill} or>${plural(N.solved, 'énigme résolue', 'énigmes résolues')} sur ${N.total}</${Pill}>
+      <${Pill}>${N.enigmas.filter((e) => e.found).length} carte${N.enigmas.filter((e) => e.found).length > 1 ? 's' : ''} trouvée${N.enigmas.filter((e) => e.found).length > 1 ? 's' : ''}</${Pill}>
     </div>
     ${N.say ? html`<div class="row on" style="margin:-6px 0 14px"><${Icon} n="sparkles" s=${16} /><span class="small">Le maître du jeu : ${N.say.text}</span></div>` : null}
     <p class="label">Tu as trouvé un numéro ? Tape-le.</p>
@@ -351,14 +337,14 @@ function NumPad({ client, N, clock, head, onOpen }) {
 function EnigmaList({ N, head, onOpen }) {
   return html`${head}
     <${Ex} size=${50}>Les énigmes</${Ex}>
-    <p class="lead muted" style="margin:10px 0 18px">Quatre énigmes sont cachées dans la maison. Chaque bonne réponse révèle un chiffre du cadenas.</p>
+    <p class="lead muted" style="margin:10px 0 18px">${N.total} cartes numérotées sont cachées dans la maison. Chaque bonne réponse révèle un chiffre et son symbole.</p>
     ${N.enigmas.map((e, i) => e.found
       ? html`<button class="erow" onClick=${() => onOpen(e.num)}>
           <span class="n">${e.num}</span>
           <span class="t">${e.solvedBy ? 'Résolue' : 'À résoudre'}<small>Trouvée dans : ${e.room || 'la maison'}</small></span>
           ${e.solvedBy ? html`<span class="d"><${Icon} n=${SYM_ICON[e.sym]} s=${16} />${e.digit}</span>` : html`<${Icon} n="chevrons-right" s=${18} />`}
         </button>`
-      : html`<div class="erow" style="opacity:.45;cursor:default"><span class="n">···</span><span class="t">Pas encore trouvée<small>${ORD[i]} énigme</small></span></div>`)}`;
+      : html`<div class="erow" style="opacity:.45;cursor:default"><span class="n">···</span><span class="t">Pas encore trouvée<small>Cherche une carte numérotée</small></span></div>`)}`;
 }
 
 function Enigma({ client, e, N, close, head }) {
@@ -367,14 +353,14 @@ function Enigma({ client, e, N, close, head }) {
   const solved = !!e.solvedBy;
   return html`${head}
     <${Ex} size=${50}>Énigme ${e.num}</${Ex}>
-    <p class="lead muted" style="margin:10px 0 16px">${ORD[idx]} énigme sur quatre. Trouvée dans : ${e.room || 'la maison'}.</p>
+    <p class="lead muted" style="margin:10px 0 16px">Trouvée dans : ${e.room || 'la maison'}.</p>
     <div class="card"><p class="just" style="white-space:pre-line">${e.q}</p></div>
     ${e.hint ? html`<div class="row" style="margin-top:8px"><${Icon} n="sparkles" s=${16} /><span class="small">${e.hint}</span></div>` : null}
     ${solved
       ? html`<div class="row on" style="margin-top:16px"><${Icon} n=${SYM_ICON[e.sym]} s=${18} /><span class="lbl">${SYMBOLS[e.sym]} : ${e.digit}<small>Ce chiffre rejoint le cadenas.</small></span></div>`
       : html`<label class="field" style="margin-top:16px"><span class="label">Ta réponse</span>
           <input class="inp" value=${ans} placeholder="Un mot" onInput=${(x) => setAns(x.target.value)} onKeyDown=${(x) => { if (x.key === 'Enter' && ans.trim()) { client.act('nuit', 'answer', { num: e.num, text: ans }); setAns(''); } }} /></label>`}
-    <p class="label" style="margin-top:16px">Le cadenas : chiffres trouvés, dans le désordre</p>
+    <p class="label" style="margin-top:16px">Les chiffres trouvés, dans le désordre</p>
     <${Digits} N=${N} />
     <div class="bottom">
       ${solved ? html`<${Btn} kind="ghost" onClick=${close}>Retour</${Btn}>`
@@ -387,7 +373,7 @@ function Enigma({ client, e, N, close, head }) {
 function Digits({ N }) {
   const got = N.enigmas.filter((e) => e.solvedBy);
   return html`<div class="dg">
-    ${[0, 1, 2, 3].map((i) => {
+    ${Array.from({ length: N.total || 4 }, (_, i) => i).map((i) => {
       const e = got[i];
       return e ? html`<div><${Icon} n=${SYM_ICON[e.sym]} s=${18} /><b>${e.digit}</b></div>` : html`<div class="lock"><${Icon} n="lock" s=${18} /><b>?</b></div>`;
     })}
@@ -397,10 +383,10 @@ function Digits({ N }) {
 function Padlock({ client, N, head }) {
   const [code, setCode] = useState('');
   const inp = useRef(null);
-  if (N.solved < 4) {
+  if (N.solved < N.total) {
     return html`${head}
       <${Ex} size=${50}>Le cadenas</${Ex}>
-      <p class="lead muted" style="margin:10px 0 18px">Quatre chiffres protègent la clé. Résous les quatre énigmes pour les réunir.</p>
+      <p class="lead muted" style="margin:10px 0 18px">Résous toutes les énigmes pour réunir les chiffres.</p>
       <${Digits} N=${N} />`;
   }
   return html`${head}
@@ -520,14 +506,14 @@ function MonsterMap({ client, pub, v, clock, gps, sim }) {
     ${refuge ? html`
       <p class="small muted" style="margin:0 0 10px">Chaque indice se déverrouille à son heure. Il s’autodétruit dès que tu l’as lu.</p>
       <${Tiles} client=${client} N=${N} clock=${clock} onRead=${(k) => setShow(k)} />` : null}
-    <div style="position:relative;height:${refuge ? '34dvh' : '50dvh'};margin-top:${refuge ? 10 : 0}px">
-      <div class="mapbox" style="position:absolute;inset:0">${map}<${SightTag} N=${N} clock=${clock} /></div>
-    </div>
+    ${refuge ? html`<p class="small muted" style="margin-top:12px">Pas de carte pendant la course : oriente-toi avec ta connaissance du quartier, ou l’appli Plans de ton téléphone.</p>`
+      : html`<div style="position:relative;height:50dvh"><div class="mapbox" style="position:absolute;inset:0">${map}<${SightTag} N=${N} clock=${clock} /></div></div>`}
     ${gps.err ? html`<div class="alert" style="margin-top:8px">${gps.err}</div>` : null}
-    ${sim ? html`<p class="sub">Démo : touche la carte pour te déplacer.</p>` : null}
+    ${sim && !refuge ? html`<p class="sub">Démo : touche la carte pour te déplacer.</p>` : null}
+    ${sim && refuge ? html`<div class="btns" style="margin-top:8px"><${Btn} kind="ghost" small onClick=${() => N.refugePt0 && gps.moveTo(N.refugePt0)}>Démo : aller au refuge</${Btn}></div>` : null}
     ${seeHunters ? html`<p class="sub ok">Tu vois les chasseurs pendant encore <${Countdown} to=${N.seeUntil} clock=${clock} short />.</p>` : null}
     ${refuge ? html`
-      <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 100 m du refuge, plus personne ne peut t’attraper.</span></div>
+      <div class="row" style="margin-top:8px"><${Icon} n="shield" s=${16} /><span class="small">À moins de 50 m du refuge, plus personne ne peut t’attraper.</span></div>
       <div class="row"><${Icon} n="triangle-alert" s=${16} /><span class="small">Si un exorcisé atteint le refuge avant toi, tu es exorcisé.</span></div>
 ` : null}
     <div class="btns" style="margin-top:8px">
@@ -681,12 +667,12 @@ function Hunter({ client, pub, v, clock, gps, sim }) {
     ${refuge ? html`<p class="small muted" style="margin:0 0 10px">${N.onlyHunters ? 'Retrouve le refuge grâce aux indices pour le détruire.' : 'Atteins le refuge avant les monstres : tous ceux encore dehors seront exorcisés.'} Chaque indice s’autodétruit dès qu’il est lu.</p>
       <${Tiles} client=${client} N=${N} clock=${clock} onRead=${(k) => setShow(k)} />
       <div style="height:10px"></div>` : null}
-    <div style="position:relative;height:${refuge ? '36dvh' : '52dvh'}">
+    ${refuge ? null : html`<div style="position:relative;height:52dvh">
       <div class="mapbox" style="position:absolute;inset:0">
         <${GameMap} center=${N.center} radius=${N.radius} me=${gps.pos} marks=${marks} blind=${blind} mapStyle=${N.mapStyle} onTap=${sim ? (p) => gps.moveTo(p) : null} />
         <span class="pill maptag"><${Icon} n="radio" s=${14} />${last ? `Signalement il y a ${Math.max(0, Math.floor((now - last) / 60000))} min` : N.huntAt > now ? `Départ dans ${fmtShort(N.huntAt - now)}` : 'En attente du signalement'}</span>
       </div>
-    </div>
+    </div>`}
     ${gps.err ? html`<div class="alert" style="margin-top:8px">${gps.err}</div>` : null}
     <p class="label" style="margin-top:14px">Tes exorcismes</p>
     ${(N.mine || []).length ? N.mine.map((x) => html`<div class="frow" key=${x.id}>
@@ -716,27 +702,55 @@ function Portal({ pub, v }) {
   </div>`;
 }
 
+// verdict de la nuit, partagé par le téléphone et la TV
+export function verdict(R, name) {
+  if (R.sealedBy) return R.destroyed ? `${name(R.sealedBy)} a détruit le refuge.` : `${name(R.sealedBy)} a atteint le refuge le premier : les monstres restés dehors sont exorcisés.`;
+  if (R.allCaught) return 'Tous les monstres ont été exorcisés.';
+  if (R.saved.length) return `${R.saved.length} monstre${R.saved.length > 1 ? 's sont rentrés' : ' est rentré'} chez ${R.saved.length > 1 ? 'eux' : 'lui'}.`;
+  return 'Le dernier portail est parti sans personne.';
+}
+
 function Results({ client, pub, v }) {
-  const R = v.nuit.results || pub.nuit.results || { saved: [], exo: [], lost: [], hunters: {} };
+  const R = v.nuit.results || pub.nuit.results || { saved: [], exo: [], lost: [], hunters: {}, ranking: [] };
   const names = Object.fromEntries((pub.players || []).map((p) => [p.id, p]));
-  const [kebab, setKebab] = useState(false);
-  const mjCaught = R.hunters.mj || 0;
-  const by = (id) => (id === 'mj' ? pub.mjName.split(' ')[0] : names[id] ? names[id].name : '?');
-  if (kebab) {
-    return html`<div class="screen"><div class="grow"></div><${Ex} size=${72} depth=${10}>Kebab<br />time</${Ex}><p class="lead" style="margin-top:16px">La partie est finie. Tout le monde se retrouve pour manger.</p><div class="grow"></div><button class="link" onClick=${() => setKebab(false)}>Revoir les résultats</button></div>`;
+  const [open, setOpen] = useState(false);
+  const name = (id) => (id === 'mj' ? pub.mjName.split(' ')[0] : names[id] ? names[id].name : '?');
+  if (!open) {
+    return html`<div class="screen">
+      <div class="scene-bg"><${Scene} name="lac" className="scene" style="width:100%;height:100%" /></div>
+      <div class="grow" style="min-height:40dvh"></div>
+      <p class="eyebrow">${hm(R.at)}</p>
+      <${Ex} size=${84} depth=${12}>Fin de<br />la partie</${Ex}>
+      <p class="lead" style="margin-top:16px">${verdict(R, name)}</p>
+      <div class="bottom"><${Btn} onClick=${() => setOpen(true)}>Kebab time</${Btn}></div>
+    </div>`;
   }
+  const S = R.summary || {};
+  const meId = v.me.id;
+  const status = (r) => (r.saved ? `rentré à ${hm(r.saved)}` : r.status === 'exorcise' ? 'exorcisé' : 'resté dehors');
   return html`<div class="screen">
-    <p class="eyebrow">${R.sealedBy ? `${by(R.sealedBy)} ${R.destroyed ? 'a détruit le refuge' : 'a atteint le refuge le premier'} à ${hm(R.at)}` : `Le dernier départ a eu lieu à ${hm(R.at)}`}</p>
-    <${Ex} size=${56} depth=${7}>Fin de<br />la nuit</${Ex}>
-    <div class="stats" style="margin:20px 0 16px">
-      <div class="stat"><b>${R.saved.length}</b><span>sauvés</span></div>
-      <div class="stat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
-      <div class="stat"><b>${mjCaught}</b><span>captures pour ${pub.mjName.split(' ')[0]}</span></div>
+    <p class="eyebrow">Résumé de la partie</p>
+    <${Ex} size=${48} depth=${6}>Le classement</${Ex}>
+    <div class="stats" style="margin:18px 0 14px">
+      <div class="stat"><b>${S.escapeMin != null ? S.escapeMin : '–'}</b><span>min pour s’évader${S.timedOut ? ' (temps écoulé)' : ''}</span></div>
+      <div class="stat"><b>${R.captures ?? 0}</b><span>exorcismes</span></div>
+      <div class="stat"><b>${R.saved.length}</b><span>rentrés chez eux</span></div>
     </div>
-    <p class="label">Les monstres</p>
-    ${R.saved.map((s) => html`<div class="frow on" key=${s.id}><${Av} src=${names[s.id] && names[s.id].av} size=${32} /><span class="fname"><b>${names[s.id] ? `${names[s.id].name} ${names[s.id].last || ''}` : '?'}</b><span>${names[s.id] && names[s.id].mon}, sauvé à ${hm(s.at)}</span></span><${Icon} n="sparkles" s=${16} /></div>`)}
-    ${R.exo.map((s) => html`<div class="frow" key=${s.id}><${Av} src=${names[s.id] && names[s.id].av} size=${32} /><span class="fname"><b>${names[s.id] ? `${names[s.id].name} ${names[s.id].last || ''}` : '?'}</b><span>${names[s.id] && names[s.id].mon}, exorcisé par ${by(s.by)}</span></span></div>`)}
-    ${R.lost.map((id) => html`<div class="frow" key=${id}><${Av} src=${names[id] && names[id].av} size=${32} /><span class="fname"><b>${names[id] ? names[id].name : '?'}</b><span>${names[id] && names[id].mon}, resté dehors</span></span></div>`)}
-    <div class="bottom sticky"><${Btn} onClick=${() => setKebab(true)}>Kebab time</${Btn}></div>
+    ${(R.ranking || []).map((r, i) => html`<div class="frow ${r.id === meId ? 'on' : ''}" key=${r.id} style="cursor:default">
+      <span class="rank">${i + 1}</span>
+      <${Av} src=${names[r.id] && names[r.id].av} size=${32} />
+      <span class="fname"><b>${names[r.id] ? `${names[r.id].name} ${names[r.id].last || ''}` : '?'}</b>
+        <span>${[r.solved ? `${r.solved} énigme${r.solved > 1 ? 's' : ''}` : '', r.survived ? `${r.survived} min de cavale` : '', r.captures ? `${r.captures} capture${r.captures > 1 ? 's' : ''}` : '', r.sealed ? 'a pris le refuge' : '', status(r)].filter(Boolean).join(' · ')}</span></span>
+      <span class="pts">${r.pts}</span>
+    </div>`)}
+    <p class="label" style="margin-top:18px">La nuit en bref</p>
+    <div class="card small" style="line-height:1.6">
+      ${S.escapeMin != null ? html`<div>Évasion en ${S.escapeMin} min, ${S.tries || 0} essai${S.tries > 1 ? 's' : ''} raté${S.tries > 1 ? 's' : ''} au cadenas, ${S.hints || 0} coup${S.hints > 1 ? 's' : ''} de pouce.</div>` : null}
+      <div>${R.hunters.mj || 0} capture${(R.hunters.mj || 0) > 1 ? 's' : ''} pour ${name('mj')}, ${S.powers || 0} pouvoir${S.powers > 1 ? 's' : ''} utilisé${S.powers > 1 ? 's' : ''}.</div>
+      ${S.firstSaved ? html`<div>Premier rentré : ${name(S.firstSaved)}.</div>` : null}
+      <div>${verdict(R, name)}</div>
+    </div>
+    <p class="sub">Points : 10 par énigme, 3 par carte trouvée, 1 par minute de cavale, 15 par capture, 50 pour rentrer chez soi (plus 1 par minute d’avance), 40 pour prendre le refuge.</p>
+    <button class="link" onClick=${() => setOpen(false)}>Revoir la fin</button>
   </div>`;
 }

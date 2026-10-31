@@ -180,17 +180,37 @@ function lum(c, n) {
 export function stylize(c, style) {
   if (!hasDom || !c) return null;
   if (style === 'pixel') {
-    const n = 48;
+    // 64 × 64, 8 tons, contours renforcés pour garder les traits du visage
+    const n = 64;
     const L = lum(c, n);
+    const B = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        let sum = 0;
+        let k = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const yy = y + dy;
+            const xx = x + dx;
+            if (yy >= 0 && yy < n && xx >= 0 && xx < n) { sum += L[yy * n + xx]; k += 1; }
+          }
+        }
+        B[y * n + x] = sum / k;
+      }
+    }
     const out = canvas(n, n);
     const x = out.getContext('2d');
     const img = x.createImageData(n, n);
     for (let i = 0; i < n * n; i++) {
       const u = i % n;
       const v = Math.floor(i / n);
-      const t = Math.pow(L[i], 0.9) * 0.94 + 0.03 + (BAYER[v % 4][u % 4] / 16 - 0.47) * 0.09;
-      const [r, g, b] = rampColor(Math.round(Math.max(0, Math.min(1, t)) * 5) / 5);
-      img.data.set([r, g, b, 255], i * 4);
+      let t = L[i] + 0.9 * (L[i] - B[i]);
+      t = Math.pow(Math.max(0, Math.min(1, t)), 0.85);
+      t = 0.05 + t * 0.92 + (BAYER[v % 4][u % 4] / 16 - 0.47) * 0.06;
+      const r = Math.hypot(u / n - 0.5, v / n - 0.47);
+      t *= 1 - 0.5 * Math.max(0, r - 0.42);
+      const [R, G, Bl] = rampColor(Math.round(Math.max(0, Math.min(1, t)) * 7) / 7);
+      img.data.set([R, G, Bl, 255], i * 4);
     }
     x.putImageData(img, 0, 0);
     return out.toDataURL('image/png');

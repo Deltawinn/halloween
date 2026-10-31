@@ -1,7 +1,7 @@
 // « Le dernier portail » : la partie en trois actes.
 // Acte 1 L'Évasion (escape game), Acte 2 L'Alerte générale (traque GPS), Acte 3 Le Refuge.
-import { DEFAULT_ESCAPE, DEFAULT_CLUES, DEFAULT_CFG, MONSTERS, POWERS, CUSTOM_POWERS, MAP_STYLES } from '../data.js';
-import { haversine, jitter, pick, MIN } from './util.js';
+import { DEFAULT_ESCAPE, DEFAULT_CLUES, DEFAULT_CFG, ENIGMA_POOL, POWERS, MAP_STYLES } from '../data.js';
+import { haversine, jitter, pick, shuffle, MIN } from './util.js';
 
 const SEC = 1000;
 const OUT_PING = 10 * SEC;
@@ -60,22 +60,18 @@ export const nuit = {
     escape(E, c, m) {
       const N = E.S.nuit;
       if (N.st !== 'idle') return;
-      const e = m.escape;
-      if (!e || !Array.isArray(e.enigmas) || e.enigmas.length !== 4) return;
-      const code = String(e.code || '').replace(/\D/g, '').slice(0, 4);
+      const e = m.escape || {};
+      const code = String(e.code ?? N.escape.code).replace(/\D/g, '').slice(0, 4);
       if (code.length !== 4) return;
+      const order = Array.isArray(e.order) && e.order.length === 4 && e.order.every((x) => ['skull', 'moon', 'eye', 'flame'].includes(x)) ? e.order.slice() : N.escape.order;
+      const cards = Array.isArray(e.cards) && e.cards.length === 5
+        ? e.cards.map((x, i) => ({ num: String(x.num || '').replace(/\D/g, '').slice(0, 6) || String(i + 1), room: String(x.room || '').slice(0, 30) }))
+        : N.escape.cards;
       N.escape = {
-        code,
-        order: Array.isArray(e.order) && e.order.length === 4 ? e.order.map(String) : N.escape.order,
-        ultimate: String(e.ultimate || '').slice(0, 600),
-        enigmas: e.enigmas.map((x, i) => ({
-          num: String(x.num || '').replace(/\D/g, '').slice(0, 6) || String(i + 1),
-          room: String(x.room || '').slice(0, 30),
-          sym: ['skull', 'moon', 'eye', 'flame'].includes(x.sym) ? x.sym : N.escape.order[i],
-          q: String(x.q || '').slice(0, 800),
-          answers: (Array.isArray(x.answers) ? x.answers : String(x.answers || '').split(/[,;\n]/)).map((a) => String(a).trim()).filter(Boolean).slice(0, 8),
-          hint: String(x.hint || '').slice(0, 300),
-        })),
+        ...N.escape, code, order, cards,
+        count: e.count === 4 ? 4 : 5,
+        ultimate: String(e.ultimate ?? N.escape.ultimate).slice(0, 800),
+        enigmas: [],
       };
     },
 
@@ -95,11 +91,14 @@ export const nuit = {
         powers: {}, status: {}, exo: {}, saved: {}, pos: {}, hpos: {}, sights: [], out: {}, lastOut: {},
         fx: nuit.init().fx, reads: {}, feed: [], results: null, sightN: 0, say: null, exoLog: [], onlyHunters: false, sealedBy: null, destroyed: false,
       });
+      // pouvoirs distribués au hasard, le moins de doublons possible
+      const deck = [];
       for (const p of E.list()) {
-        const known = p.monster && MONSTERS.find((x) => x.name === p.monster.name);
-        N.powers[p.id] = { id: known ? known.power : pick(CUSTOM_POWERS), used: false };
+        if (!deck.length) deck.push(...shuffle(Object.keys(POWERS)));
+        N.powers[p.id] = { id: deck.pop(), used: false };
         N.status[p.id] = 'monstre';
       }
+      draw(N);
       E.S.screen = 'nuit';
       E.startRun('nuit');
       feed(E, 'La nuit commence. Les monstres se réveillent dans la maison.');
@@ -179,7 +178,7 @@ export const nuit = {
 
     reset(E) {
       const N = E.S.nuit;
-      const keep = { cfg: N.cfg, center: N.center, refugePt: N.refugePt, escape: N.escape, clues: N.clues };
+      const keep = { cfg: N.cfg, center: N.center, refugePt: N.refugePt, escape: { ...N.escape, enigmas: [] }, clues: N.clues };
       Object.assign(N, nuit.init(), keep);
       E.S.screen = 'lobby';
     },
@@ -215,8 +214,9 @@ export const nuit = {
       N.solved[e.num] = { pid, at: E.now() };
       const n = Object.keys(N.solved).length;
       feed(E, `${E.name(pid)} a résolu l’énigme ${e.num} : un chiffre du cadenas apparaît.`);
-      E.overlay({ kind: 'clue', title: `Énigme ${e.num} résolue`, sub: `${E.name(pid)} a trouvé. ${n === 4 ? 'Les quatre chiffres sont réunis.' : `${n} chiffre${n > 1 ? 's' : ''} sur 4.`}`, ms: 6000 });
-      E.alertMany(E.ids(), n === 4 ? 'Tous les indices sont réunis, une ultime réponse vous permettra de fuir.' : `Énigme ${e.num} résolue par ${E.name(pid)}.`, 'ok');
+      const total = N.escape.enigmas.length;
+      E.overlay({ kind: 'clue', title: `Énigme ${e.num} résolue`, sub: `${E.name(pid)} a trouvé. ${n === total ? 'Tous les chiffres sont réunis.' : `${n} chiffre${n > 1 ? 's' : ''} sur ${total}.`}`, ms: 6000 });
+      E.alertMany(E.ids(), n === total ? 'Tous les indices sont réunis, une ultime réponse vous permettra de fuir.' : `Énigme ${e.num} résolue par ${E.name(pid)}.`, 'ok');
     },
 
     hint(E, { pid }, m) {
@@ -232,7 +232,7 @@ export const nuit = {
     code(E, { pid }, m) {
       const N = E.S.nuit;
       if (N.st !== 'evasion' || N.pausedAt) return;
-      if (Object.keys(N.solved).length < 4) return;
+      if (Object.keys(N.solved).length < (N.escape.count || 4)) return;
       const code = String(m.code || '').replace(/\D/g, '');
       if (code === N.escape.code) {
         feed(E, `${E.name(pid)} a trouvé le code du cadenas.`);
@@ -259,8 +259,9 @@ export const nuit = {
       }
       if (st !== 'monstre') return;
       N.pos[pid] = p;
-      // hors zone
-      if (N.center) {
+      // hors zone : seulement pendant l'alerte (pendant la course au refuge, plus de zone)
+      if (N.st !== 'alerte' && N.out[pid]) delete N.out[pid];
+      if (N.center && N.st === 'alerte') {
         const d = haversine(N.center, p) - Math.min(p.acc, 50);
         if (d > N.cfg.radius) {
           if (!N.out[pid]) {
@@ -423,6 +424,7 @@ export const nuit = {
       if (N.saved[pid]) v.savedAt = N.saved[pid];
     }
     if (N.st === 'fin') v.results = N.results;
+    if (E.demo && N.st === 'refuge') v.refugePt0 = N.refugePt; // démo : bouton pour aller au refuge
     return v;
   },
 
@@ -480,7 +482,8 @@ function escapeView(E) {
       return o;
     }),
     solved,
-    ultimate: solved === 4 ? N.escape.ultimate : null,
+    total: N.escape.enigmas.length,
+    ultimate: solved && solved === N.escape.enigmas.length ? N.escape.ultimate : null,
     hintsUsed: Object.values(N.hints).filter((h) => !h.free).length,
     tries: N.tries,
     projectedHead: headStart(E, false),
@@ -488,8 +491,23 @@ function escapeView(E) {
 }
 
 function digitFor(N, e) {
+  if (e.sym === 'ghost') return N.escape.decoy || '0';
   const i = N.escape.order.indexOf(e.sym);
   return i >= 0 ? N.escape.code[i] : '?';
+}
+
+// tirage des énigmes de la partie : la réserve est mélangée, chaque carte reçoit une énigme et un symbole
+function draw(N) {
+  const X = N.escape;
+  const n = X.count === 4 ? 4 : 5;
+  const picks = shuffle(ENIGMA_POOL).slice(0, n);
+  const syms = shuffle(n === 5 ? [...X.order, 'ghost'] : [...X.order]);
+  X.decoy = String(Math.floor(Math.random() * 10));
+  X.enigmas = picks.map((e, i) => ({
+    num: (X.cards[i] || {}).num || String(i + 1),
+    room: (X.cards[i] || {}).room || '',
+    sym: syms[i], q: e.q, answers: e.answers, hint: e.hint,
+  }));
 }
 
 function headStart(E, timedOut) {
@@ -593,6 +611,14 @@ function finish(E) {
     destroyed: !!N.destroyed,
   };
   N.results.allCaught = !N.results.saved.length && !lost.length && !N.sealedBy;
+  N.results.ranking = ranking(E, now);
+  N.results.summary = {
+    escapeMin: N.escapedAt ? Math.round((N.escapedAt - N.startAt) / MIN) : null,
+    timedOut: N.timedOut, head: N.head, tries: N.tries,
+    hints: Object.values(N.hints).filter((h) => !h.free).length,
+    powers: Object.values(N.powers).filter((p) => p.used).length,
+    firstSaved: N.results.saved[0] ? N.results.saved[0].id : null,
+  };
   feed(E, N.results.allCaught ? 'Tous les monstres ont été exorcisés : les chasseurs gagnent.' : 'Le dernier départ pour l’Hôtel Transylvanie a eu lieu.');
   E.overlay({
     kind: 'reveal',
@@ -601,6 +627,27 @@ function finish(E) {
     ms: 10000,
   });
   E.alertAll('La partie est terminée. Kebab time !', 'ok');
+}
+
+// classement de la nuit : énigmes, survie pendant l'alerte, captures, arrivée au refuge
+function ranking(E, now) {
+  const N = E.S.nuit;
+  const log = N.exoLog || [];
+  const huntStart = Math.max(N.alertAt || 0, N.huntAt || 0);
+  const alertEnd = N.refugeAt || now;
+  return E.list().map((p) => {
+    const id = p.id;
+    const solved = Object.values(N.solved).filter((x) => x.pid === id).length;
+    const found = Object.values(N.found).filter((x) => x.pid === id).length;
+    const caughtAt = log.filter((x) => x.id === id).reduce((m, x) => Math.min(m, x.at), Infinity);
+    const survived = huntStart ? Math.max(0, Math.round((Math.min(caughtAt, alertEnd) - huntStart) / MIN)) : 0;
+    const captures = log.filter((x) => x.by === id).length;
+    const saved = N.saved[id] || 0;
+    let pts = solved * 10 + found * 3 + survived + captures * 15;
+    if (saved) pts += 50 + Math.max(0, Math.round((N.endsAt - saved) / MIN));
+    if (N.sealedBy === id) pts += 40;
+    return { id, pts, solved, found, survived, captures, saved, sealed: N.sealedBy === id, status: N.status[id] };
+  }).sort((a, b) => b.pts - a.pts);
 }
 
 function countBy(arr) {

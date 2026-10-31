@@ -1,6 +1,7 @@
 // Écran TV : il fait tourner la partie (l'hôte) et affiche ce que tout le monde peut voir.
 import { html, useState, useEffect, useRef, useSource, useNow, Safe, Countdown, Icon, Ex, Av, Pill, Scene, QR, Title, fmtShort, hm, plural, SYM_ICON } from './kit.js';
 import { GameMap } from './map.js';
+import { verdict } from './player.js';
 import { play, unlockAudio, setSound, soundOn } from './sound.js';
 
 export function TvApp({ host }) {
@@ -134,7 +135,7 @@ function Evasion({ pub, clock }) {
     </div>
     <div style="display:flex;align-items:center;gap:40px;margin-top:50px">
       <p class="tvlabel" style="margin:0;width:200px">Le cadenas</p>
-      <div class="tvdg">${[0, 1, 2, 3].map((i) => {
+      <div class="tvdg">${Array.from({ length: N.total || 4 }, (_, i) => i).map((i) => {
         const e = N.enigmas.filter((x) => x.solvedBy)[i];
         return e ? html`<div><${Icon} n=${SYM_ICON[e.sym]} s=${30} /><b>${e.digit}</b></div>` : html`<div class="lock"><${Icon} n="lock" s=${30} /><b>?</b></div>`;
       })}</div>
@@ -197,20 +198,21 @@ function Refuge({ pub, clock }) {
 
 function Fin({ pub }) {
   const N = pub.nuit;
-  const R = N.results || { saved: [], exo: [], hunters: {} };
-  const mj = pub.mjName.split(' ')[0];
+  const R = N.results || { saved: [], exo: [], hunters: {}, ranking: [] };
+  const names = Object.fromEntries(pub.players.map((p) => [p.id, p]));
+  const name = (id) => (id === 'mj' ? pub.mjName.split(' ')[0] : names[id] ? names[id].name : '?');
+  const rows = (R.ranking || []).slice(0, 10);
   return html`
-    <div class="scene-wrap" style="right:0;top:0;width:760px;height:1080px;opacity:.8"><${Scene} name="lac" className="scene" style="width:100%;height:100%" /></div>
-    <div class="pg" style="width:1250px">
-      <p class="tvlabel">${R.sealedBy ? (R.destroyed ? 'Le refuge a été détruit' : 'Un exorcisé a atteint le refuge le premier') : `Le dernier départ a eu lieu à ${hm(R.at || Date.now())}`}</p>
-      <${Ex} size=${150} depth=${12}>Fin de la nuit</${Ex}>
-      <div style="display:flex;gap:14px;margin-top:50px">
-        <div class="tvstat"><b>${R.saved.length}</b><span>monstres sauvés</span></div>
-        <div class="tvstat"><b>${R.captures ?? R.exo.length}</b><span>exorcismes</span></div>
-        <div class="tvstat"><b>${R.hunters.mj || 0}</b><span>captures pour ${mj}</span></div>
+    <div class="scene-wrap" style="right:0;top:0;width:700px;height:1080px;opacity:.75"><${Scene} name="lac" className="scene" style="width:100%;height:100%" /></div>
+    <div class="pg" style="width:1300px">
+      <${Ex} size=${132} depth=${12} className="oneline">Fin de la partie</${Ex}>
+      <p class="tvlead" style="margin-top:26px">${verdict(R, name)}</p>
+      <div class="tvrank" style="margin-top:44px">
+        ${rows.map((r, i) => html`<div key=${r.id} class=${i < 3 ? 'top' : ''}>
+          <span class="rk">${i + 1}</span><${Av} src=${names[r.id] && names[r.id].av} size=${54} />
+          <b>${name(r.id)}</b><span class="pt">${r.pts}</span>
+        </div>`)}
       </div>
-      <div style="margin-top:50px"><${Cast} pub=${pub} size=${80} cols=${10} gap=${10} statusOf=${statusFn(N)} /></div>
-      <div style="margin-top:60px"><${Ex} size=${80} depth=${8} tag="p">Kebab time.</${Ex}></div>
     </div>`;
 }
 

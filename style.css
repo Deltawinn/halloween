@@ -356,3 +356,13 @@ body.is-demo .tvwrap{top:44px}
 .tvsay{position:absolute;left:96px;right:96px;bottom:110px;border:1px solid #7a3a12;background:#1c0f06;border-radius:3px;padding:24px 30px}
 .tvsay span{font:500 20px 'Inter Tight';color:var(--orange2)}
 .tvsay p{margin:8px 0 0;font:400 40px/1.25 Gloock;color:var(--creme)}
+
+.rank{font:400 22px Gloock;color:var(--orange);width:24px;text-align:center;flex:none}
+.pts{font:400 22px Gloock;color:var(--orange2);flex:none}
+
+.tvrank{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px;width:1180px}
+.tvrank div{display:flex;align-items:center;gap:16px;background:var(--carte);border:1px solid var(--bord);border-radius:3px;padding:10px 18px}
+.tvrank div.top{border-color:#7a3a12;background:#1c0f06}
+.tvrank .rk{font:400 34px Gloock;color:var(--orange);width:40px;text-align:center}
+.tvrank b{flex:1;font-size:28px;font-weight:600}
+.tvrank .pt{font:400 34px Gloock;color:var(--orange2)}
